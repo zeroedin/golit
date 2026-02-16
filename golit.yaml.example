@@ -1,0 +1,43 @@
+# golit.yaml - Configuration file for golit SSR
+#
+# Place this in your project root as golit.yaml.
+# golit auto-detects it, or pass explicitly: golit transform --config golit.yaml
+#
+# All settings are optional. CLI flags override config values.
+
+transform:
+  # HTML directory to process
+  input: public/
+
+  # Output directory (default: in-place)
+  out: dist/
+
+  # Pre-bundled component bundles
+  # defs: bundles/
+
+  # Source directory to auto-bundle
+  # sources: node_modules/@rhds/elements/elements/
+
+  # Import map file for resolving bare-module specifiers
+  importmap: importmap.json
+
+  # Custom elements to skip (not SSR-compatible)
+  ignore:
+    - rh-tooltip
+    - rh-dialog
+
+  # Print progress
+  verbose: true
+
+  # Process without writing
+  # dryRun: true
+
+bundle:
+  # Source file or directory
+  input: src/components/
+
+  # Output directory
+  out: bundles/
+
+  # Minify bundles
+  minify: true

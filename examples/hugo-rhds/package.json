@@ -1,0 +1,16 @@
+{
+  "name": "hugo-rhds",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@rhds/elements": "^4.0.2",
+    "lit": "^3.3.2"
+  }
+}

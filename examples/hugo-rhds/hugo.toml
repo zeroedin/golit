@@ -1,0 +1,58 @@
+baseURL = '/'
+languageCode = 'en-us'
+title = 'Red Hat Design System'
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+
+[taxonomies]
+  status = "statuses"
+  tag = "tags"
+
+[menu]
+  [[menu.main]]
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    name = "Elements"
+    url = "/elements/"
+    weight = 10
+  [[menu.main]]
+    name = "Patterns"
+    url = "/patterns/"
+    weight = 20
+  [[menu.main]]
+    name = "Foundations"
+    url = "/foundations/"
+    weight = 30
+  [[menu.main]]
+    name = "Get started"
+    url = "/get-started/"
+    weight = 40
+  [[menu.main]]
+    name = "Theming"
+    url = "/theming/"
+    weight = 50
+  [[menu.main]]
+    name = "Tokens"
+    url = "/tokens/"
+    weight = 60
+  [[menu.main]]
+    name = "About"
+    url = "/about/"
+    weight = 70
+  [[menu.main]]
+    name = "Release notes"
+    url = "/release-notes/"
+    weight = 80
+  [[menu.main]]
+    name = "Accessibility"
+    url = "/accessibility/"
+    weight = 90
+  [[menu.main]]
+    name = "Support"
+    url = "/support/"
+    weight = 100

@@ -1,0 +1,8 @@
+transform:
+  defs: bundles/
+  verbose: true
+  preload:
+    - prism-esm
+  ignore:
+    - rh-audio-player
+    - rh-footer

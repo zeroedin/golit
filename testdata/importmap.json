@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "@rhds/elements/": "../node_modules/@rhds/elements/elements/"
+  }
+}

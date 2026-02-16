@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@lit-labs/ssr-client/lit-element-hydrate-support.js": "./node_modules/@lit-labs/ssr-client/lit-element-hydrate-support.js",
+    "@rhds/elements/": "./node_modules/@rhds/elements/elements/"
+  }
+}
