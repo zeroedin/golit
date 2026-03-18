@@ -34,6 +34,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "compile":
+		if err := runCompile(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "transform":
 		if err := runTransform(os.Args[2:]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -61,13 +66,17 @@ func printUsage() {
 Usage:
   golit bundle <source.ts|js> [--out <file.golit.bundle.js>] [--minify]
   golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
-  golit transform <html-dir> [--defs <dir>] [--sources <dir>] [--importmap <file>] [--out <dir>]
+  golit compile --defs <bundles-dir> [--out <file.golit.compiled.js>] [--minify]
+  golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
   golit render --defs <bundles-dir> '<html-fragment>'
+  golit render --component-js '<source>' '<html-fragment>'
   golit version
 
 Commands:
   bundle      Bundle a Lit component source file into a .golit.bundle.js
               file for SSR rendering. Includes Lit, DOM shim, and all deps.
+  compile     Combine all bundles from a --defs directory into a single
+              .golit.compiled.js artifact with a tag registry manifest.
   transform   Post-process HTML files, expanding custom elements into
               Declarative Shadow DOM using bundled components.
   render      Render a single HTML fragment to stdout.
@@ -76,12 +85,15 @@ Commands:
 Options:
   --out <path>       Output path for bundle/transform
   --defs <dir>       Directory containing pre-bundled .golit.bundle.js files
+  --compiled <file>  Single pre-compiled .golit.compiled.js artifact
   --sources <dir>    Directory of component .js/.ts source files (auto-bundles)
   --importmap <file> Import map JSON file for resolving bare-module specifiers
   --ignore <tag>     Skip SSR for this custom element (repeatable)
   --minify           Minify the output bundle
   --verbose          Print progress to stderr
   --dry-run          Process files without writing changes
+  --strict           Exit with error if any components fail to render
+  --component-js     Inline JS/TS component source for render command (repeatable)
 
 Component Discovery (transform command):
   golit discovers which components to SSR using four modes (combinable):
@@ -247,16 +259,108 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 	return nil
 }
 
+// --- compile command ---
+
+func runCompile(args []string) error {
+	var defsDir, outPath string
+	var minify bool
+
+	i := 0
+	for i < len(args) {
+		switch args[i] {
+		case "--defs":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--defs requires a directory argument")
+			}
+			defsDir = args[i+1]
+			i += 2
+		case "--out", "-o":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--out requires a file argument")
+			}
+			outPath = args[i+1]
+			i += 2
+		case "--minify":
+			minify = true
+			i++
+		default:
+			if strings.HasPrefix(args[i], "--") {
+				return fmt.Errorf("unknown option: %s", args[i])
+			}
+			if defsDir == "" {
+				defsDir = args[i]
+			}
+			i++
+		}
+	}
+
+	if defsDir == "" {
+		return fmt.Errorf("missing required --defs <dir> argument")
+	}
+	if outPath == "" {
+		outPath = "golit.compiled.js"
+	}
+
+	registry := jsengine.NewRegistry()
+	if err := registry.LoadDir(defsDir); err != nil {
+		return fmt.Errorf("loading bundles: %w", err)
+	}
+
+	tagNames := registry.TagNames()
+	if len(tagNames) == 0 {
+		return fmt.Errorf("no components found in %s", defsDir)
+	}
+
+	var compiled strings.Builder
+
+	seen := make(map[string]bool)
+	for _, tag := range tagNames {
+		bundle := registry.Lookup(tag)
+		if seen[bundle] {
+			continue
+		}
+		seen[bundle] = true
+		compiled.WriteString(bundle)
+		compiled.WriteString("\n")
+	}
+
+	compiled.WriteString("globalThis.__golitRegistry = {")
+	for i, tag := range tagNames {
+		if i > 0 {
+			compiled.WriteString(", ")
+		}
+		fmt.Fprintf(&compiled, "%q: true", tag)
+	}
+	compiled.WriteString("};\n")
+
+	output := compiled.String()
+	_ = minify // reserved for future esbuild minification pass
+
+	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+		return fmt.Errorf("creating output directory: %w", err)
+	}
+	if err := os.WriteFile(outPath, []byte(output), 0644); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(os.Stderr, "golit: compiled %d component(s) -> %s (%d bytes)\n", len(tagNames), outPath, len(output))
+	return nil
+}
+
 // --- transform command ---
 
 func runTransform(args []string) error {
 	cliOpts := transformer.Options{}
 	var htmlDir string
 	var configPath string
+	var strict bool
 
 	i := 0
 	for i < len(args) {
 		switch args[i] {
+		case "--strict":
+			strict = true
+			i++
 		case "--config", "-c":
 			if i+1 >= len(args) {
 				return fmt.Errorf("--config requires a file argument")
@@ -268,6 +372,12 @@ func runTransform(args []string) error {
 				return fmt.Errorf("--defs requires a directory argument")
 			}
 			cliOpts.DefsDir = args[i+1]
+			i += 2
+		case "--compiled":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--compiled requires a file argument")
+			}
+			cliOpts.CompiledFile = args[i+1]
 			i += 2
 		case "--sources":
 			if i+1 >= len(args) {
@@ -301,6 +411,9 @@ func runTransform(args []string) error {
 			i++
 		case "--dry-run":
 			cliOpts.DryRun = true
+			i++
+		case "--isolate":
+			cliOpts.Isolate = true
 			i++
 		case "--out", "-o":
 			if i+1 >= len(args) {
@@ -379,11 +492,22 @@ func runTransform(args []string) error {
 		}
 	}
 
+	if len(result.RenderErrors) > 0 {
+		fmt.Fprintf(os.Stderr, "golit: %d component(s) failed to render (left as-is for client-side):\n", len(result.RenderErrors))
+		for _, re := range result.RenderErrors {
+			fmt.Fprintf(os.Stderr, "  - %s\n", re.Error())
+		}
+	}
+
 	if len(result.Unregistered) > 0 {
 		fmt.Fprintf(os.Stderr, "golit: %d custom element(s) found without bundles (passed through for client-side rendering):\n", len(result.Unregistered))
 		for _, tag := range result.Unregistered {
 			fmt.Fprintf(os.Stderr, "  - <%s>\n", tag)
 		}
+	}
+
+	if strict && len(result.RenderErrors) > 0 {
+		return fmt.Errorf("%d component(s) failed to render", len(result.RenderErrors))
 	}
 
 	return nil
@@ -393,6 +517,7 @@ func runTransform(args []string) error {
 
 func runRender(args []string) error {
 	var defsDir, fragment string
+	var componentSources []string
 
 	i := 0
 	for i < len(args) {
@@ -402,6 +527,12 @@ func runRender(args []string) error {
 				return fmt.Errorf("--defs requires a directory argument")
 			}
 			defsDir = args[i+1]
+			i += 2
+		case "--component-js":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--component-js requires a JS source argument")
+			}
+			componentSources = append(componentSources, args[i+1])
 			i += 2
 		default:
 			if strings.HasPrefix(args[i], "--") {
@@ -416,16 +547,31 @@ func runRender(args []string) error {
 		}
 	}
 
-	if defsDir == "" {
-		return fmt.Errorf("missing required --defs <dir> argument")
+	if defsDir == "" && len(componentSources) == 0 {
+		return fmt.Errorf("missing required --defs <dir> or --component-js <source> argument")
 	}
 	if fragment == "" {
 		return fmt.Errorf("missing HTML fragment argument")
 	}
 
 	registry := jsengine.NewRegistry()
-	if err := registry.LoadDir(defsDir); err != nil {
-		return fmt.Errorf("loading bundles: %w", err)
+	if defsDir != "" {
+		if err := registry.LoadDir(defsDir); err != nil {
+			return fmt.Errorf("loading bundles: %w", err)
+		}
+	}
+
+	for _, src := range componentSources {
+		bundle, err := jsengine.BundleSource(src)
+		if err != nil {
+			return fmt.Errorf("bundling inline component: %w", err)
+		}
+		tagName, err := jsengine.DiscoverTagName(bundle)
+		if err != nil {
+			return fmt.Errorf("discovering tag from inline component: %w", err)
+		}
+		registry.Register(tagName, bundle)
+		fmt.Fprintf(os.Stderr, "golit: registered <%s> from inline source\n", tagName)
 	}
 
 	output, err := transformer.RenderFragment(fragment, registry)

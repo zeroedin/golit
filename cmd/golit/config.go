@@ -48,6 +48,9 @@ type TransformConfig struct {
 
 	// DryRun processes without writing.
 	DryRun bool `yaml:"dryRun"`
+
+	// Isolate creates a fresh QJS context per HTML file.
+	Isolate bool `yaml:"isolate"`
 }
 
 // BundleConfig holds bundle-specific settings.
@@ -112,6 +115,9 @@ func (c *Config) ToTransformOptions(cliOpts transformer.Options) transformer.Opt
 	if c.Transform.DryRun {
 		opts.DryRun = true
 	}
+	if c.Transform.Isolate {
+		opts.Isolate = true
+	}
 	if len(c.Transform.Ignore) > 0 {
 		opts.Ignored = make(map[string]bool)
 		for _, tag := range c.Transform.Ignore {
@@ -123,6 +129,9 @@ func (c *Config) ToTransformOptions(cliOpts transformer.Options) transformer.Opt
 	}
 
 	// CLI flags override config
+	if cliOpts.CompiledFile != "" {
+		opts.CompiledFile = cliOpts.CompiledFile
+	}
 	if cliOpts.DefsDir != "" {
 		opts.DefsDir = cliOpts.DefsDir
 	}
@@ -140,6 +149,9 @@ func (c *Config) ToTransformOptions(cliOpts transformer.Options) transformer.Opt
 	}
 	if cliOpts.DryRun {
 		opts.DryRun = true
+	}
+	if cliOpts.Isolate {
+		opts.Isolate = true
 	}
 	if cliOpts.Ignored != nil {
 		if opts.Ignored == nil {
