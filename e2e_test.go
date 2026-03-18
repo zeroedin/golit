@@ -52,6 +52,7 @@ func TestE2E_RenderFragment_MyGreeting(t *testing.T) {
 	assertContains(t, output, `shadowrootmode="open"`)
 	assertContains(t, output, `<style>`)
 	assertContains(t, output, `Hugo`)
+	assertDSDCount(t, output, 1)
 }
 
 func TestE2E_RenderHTML_FullDocument(t *testing.T) {
@@ -68,6 +69,7 @@ func TestE2E_RenderHTML_FullDocument(t *testing.T) {
 	assertContains(t, output, `<title>Test</title>`)
 	assertContains(t, output, `Go`)
 	assertContains(t, output, `shadowrootmode`)
+	assertDSDCount(t, output, 1)
 }
 
 func TestE2E_TransformDir(t *testing.T) {
@@ -139,6 +141,27 @@ func TestE2E_UnregisteredElements(t *testing.T) {
 	}
 }
 
+func TestE2E_NestedComponents(t *testing.T) {
+	bundleDir := setupBundles(t)
+	registry := jsengine.NewRegistry()
+	if err := registry.LoadDir(bundleDir); err != nil {
+		t.Fatal(err)
+	}
+
+	output, err := transformer.RenderFragment(
+		`<my-card subtitle="Nested"><my-greeting name="Inner"></my-greeting></my-card>`,
+		registry,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Output:\n%s", output)
+	assertDSDCount(t, output, 2)
+	assertContains(t, output, `Inner`)
+	assertContains(t, output, `Nested`)
+}
+
 func TestE2E_Idempotent(t *testing.T) {
 	bundleDir := setupBundles(t)
 	registry := jsengine.NewRegistry()
@@ -166,5 +189,17 @@ func assertContains(t *testing.T, output, substr string) {
 	t.Helper()
 	if !strings.Contains(output, substr) {
 		t.Errorf("output does not contain %q\n\nFull output:\n%s", substr, output)
+	}
+}
+
+func countDSD(output string) int {
+	return strings.Count(output, `shadowrootmode="open"`)
+}
+
+func assertDSDCount(t *testing.T, output string, atLeast int) {
+	t.Helper()
+	n := countDSD(output)
+	if n < atLeast {
+		t.Errorf("expected >= %d DSD templates, got %d\n\nFull output:\n%s", atLeast, n, output)
 	}
 }
