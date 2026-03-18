@@ -1,12 +1,16 @@
 package jsengine
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/fastschema/qjs"
 )
+
+//go:embed helpers.js
+var helpersJS string
 
 // RenderResult contains the output of rendering a custom element.
 type RenderResult struct {
@@ -34,16 +38,48 @@ func NewEngine() (*Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating QJS runtime: %w", err)
 	}
-	return &Engine{
+	e := &Engine{
 		runtime: rt,
 		ctx:     rt.Context(),
 		loaded:  make(map[string]bool),
-	}, nil
+	}
+	if err := e.initHelpers(); err != nil {
+		rt.Close()
+		return nil, fmt.Errorf("initializing helpers: %w", err)
+	}
+	return e, nil
+}
+
+// initHelpers loads the SSR rendering helper functions into the QJS
+// global scope once, so they don't need to be re-sent with every
+// RenderElement call.
+func (e *Engine) initHelpers() error {
+	_, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS))
+	return err
 }
 
 // Close releases the QJS runtime resources.
 func (e *Engine) Close() {
 	e.runtime.Close()
+}
+
+// Reset creates a fresh QJS context within the same runtime, clearing
+// all global state. Previously loaded bundles must be re-loaded.
+// This is cheaper than Close()+NewEngine() because it reuses the
+// compiled WASM module.
+func (e *Engine) Reset() error {
+	e.runtime.Close()
+	rt, err := qjs.New()
+	if err != nil {
+		return fmt.Errorf("resetting QJS runtime: %w", err)
+	}
+	e.runtime = rt
+	e.ctx = rt.Context()
+	e.loaded = make(map[string]bool)
+	if err := e.initHelpers(); err != nil {
+		return fmt.Errorf("re-initializing helpers: %w", err)
+	}
+	return nil
 }
 
 // SetPreloadModules tells the engine which module names have been preloaded
@@ -141,7 +177,6 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 				const el = new Ctor();
 				const attrs = %s;
 
-				// Set attributes AND properties on the element
 				for (const [key, value] of Object.entries(attrs)) {
 					el.setAttribute(key, value);
 					const propName = attributeToProperty(Ctor, key);
@@ -151,14 +186,12 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 					}
 				}
 
-				// Get rendered HTML
 				let html = '';
 				if (typeof el.render === 'function') {
 					const result = el.render();
 					html = __collectTemplateResult(result);
 				}
 
-				// Extract CSS from static styles
 				let css = '';
 				if (Ctor.styles) {
 					css = extractStyles(Ctor.styles);
@@ -171,48 +204,6 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 				return JSON.stringify({ error: e.message, stack: e.stack || '' });
 			}
 		})();
-
-		function attributeToProperty(Ctor, attrName) {
-			if (Ctor.__attributeToPropertyMap) {
-				return Ctor.__attributeToPropertyMap.get(attrName);
-			}
-			if (Ctor.elementProperties) {
-				for (const [propName, config] of Ctor.elementProperties) {
-					const mappedAttr = (config && config.attribute !== undefined)
-						? (config.attribute === false ? null : config.attribute)
-						: propName.toLowerCase();
-					if (mappedAttr === attrName) return propName;
-				}
-			}
-			return attrName;
-		}
-
-		function getPropertyConfig(Ctor, propName) {
-			if (Ctor.elementProperties) {
-				return Ctor.elementProperties.get(propName) || {};
-			}
-			return {};
-		}
-
-		function coerceValue(value, config) {
-			const type = config && config.type;
-			if (type === Number) return Number(value);
-			if (type === Boolean) return value !== 'false';
-			return value;
-		}
-
-		function extractStyles(styles) {
-			if (!styles) return '';
-			if (typeof styles === 'string') return styles;
-			if (Array.isArray(styles)) {
-				return styles.map(s => extractStyles(s)).filter(Boolean).join('\n');
-			}
-			// CSSResult object from Lit's css tagged template
-			if (styles.cssText !== undefined) return styles.cssText;
-			// Adopted stylesheet
-			if (styles._$cssResult$) return styles.cssText || '';
-			return '';
-		}
 	`, tagName, tagName, string(attrsJSON), tagName)
 
 	result, err := e.ctx.Eval("render.js", qjs.Code(script))
@@ -241,6 +232,84 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 		CSS:     strings.TrimSpace(output.CSS),
 		TagName: output.TagName,
 	}, nil
+}
+
+// BatchRequest describes a single element to render in a batch call.
+type BatchRequest struct {
+	ID      int               `json:"id"`
+	TagName string            `json:"tagName"`
+	Attrs   map[string]string `json:"attrs"`
+}
+
+// BatchResult contains the output of rendering a single element in a batch.
+type BatchResult struct {
+	ID      int    `json:"id"`
+	HTML    string `json:"html"`
+	CSS     string `json:"css"`
+	TagName string `json:"tagName"`
+	Error   string `json:"error,omitempty"`
+}
+
+// RenderBatch renders multiple custom elements in a single QJS Eval call,
+// reducing Go-to-JS boundary crossings. Each element is still rendered
+// individually within QJS; the batching is at the transport layer only.
+func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
+	if len(requests) == 0 {
+		return nil, nil
+	}
+
+	reqJSON, err := json.Marshal(requests)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling batch requests: %w", err)
+	}
+
+	script := fmt.Sprintf(`
+		(function() {
+			const requests = %s;
+			const results = [];
+			for (const req of requests) {
+				const Ctor = customElements.get(req.tagName);
+				if (!Ctor) {
+					results.push({ id: req.id, error: 'Element <' + req.tagName + '> not registered' });
+					continue;
+				}
+				try {
+					const el = new Ctor();
+					for (const [key, value] of Object.entries(req.attrs || {})) {
+						el.setAttribute(key, value);
+						const propName = attributeToProperty(Ctor, key);
+						if (propName) {
+							const propConfig = getPropertyConfig(Ctor, propName);
+							el[propName] = coerceValue(value, propConfig);
+						}
+					}
+					let html = '';
+					if (typeof el.render === 'function') {
+						html = __collectTemplateResult(el.render());
+					}
+					let css = '';
+					if (Ctor.styles) { css = extractStyles(Ctor.styles); }
+					else if (Ctor.elementStyles) { css = extractStyles(Ctor.elementStyles); }
+					results.push({ id: req.id, html: html, css: css, tagName: req.tagName });
+				} catch(e) {
+					results.push({ id: req.id, error: e.message, tagName: req.tagName });
+				}
+			}
+			return JSON.stringify(results);
+		})();
+	`, string(reqJSON))
+
+	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script))
+	if err != nil {
+		return nil, fmt.Errorf("batch render eval: %w", err)
+	}
+
+	var results []BatchResult
+	if err := json.Unmarshal([]byte(result.String()), &results); err != nil {
+		return nil, fmt.Errorf("parsing batch results: %w (raw: %s)", err, result.String())
+	}
+
+	return results, nil
 }
 
 // IsRegistered checks if a tag name is registered in the QJS custom elements registry.
