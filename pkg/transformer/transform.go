@@ -22,6 +22,10 @@ type Options struct {
 	// DefsDir is the directory containing .golit.bundle.js files (Mode 1).
 	DefsDir string
 
+	// CompiledFile is a path to a single .golit.compiled.js artifact
+	// containing all bundles and a tag registry manifest.
+	CompiledFile string
+
 	// SourcesDir is a directory of component .js/.ts source files to bundle
 	// on-demand (Mode 2).
 	SourcesDir string
@@ -56,6 +60,24 @@ type Options struct {
 	// OutDir is an optional output directory. When set, transformed files
 	// are written here instead of modifying the input files in-place.
 	OutDir string
+
+	// Isolate creates a fresh QJS context per HTML file, clearing all
+	// global state between files. Slower but safer for untrusted components.
+	Isolate bool
+}
+
+// RenderError records a custom element that failed to render during SSR.
+type RenderError struct {
+	TagName string
+	File    string
+	Err     error
+}
+
+func (e RenderError) Error() string {
+	if e.File != "" {
+		return fmt.Sprintf("<%s> in %s: %v", e.TagName, e.File, e.Err)
+	}
+	return fmt.Sprintf("<%s>: %v", e.TagName, e.Err)
 }
 
 // Result holds stats from a transform run.
@@ -63,12 +85,20 @@ type Result struct {
 	FilesProcessed int
 	FilesModified  int
 	Errors         []error
+	RenderErrors   []RenderError
 	Unregistered   []string
 }
 
 // TransformDir processes all HTML files in a directory tree.
 func TransformDir(dir string, opts Options) (*Result, error) {
 	registry := jsengine.NewRegistry()
+
+	// Mode 0: Pre-compiled single artifact
+	if opts.CompiledFile != "" {
+		if err := registry.LoadCompiled(opts.CompiledFile); err != nil {
+			return nil, fmt.Errorf("loading compiled artifact: %w", err)
+		}
+	}
 
 	// Mode 1: Pre-bundled .golit.bundle.js files
 	if opts.DefsDir != "" {
@@ -96,7 +126,7 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 
 	// Auto-discover is on by default if no other mode specified
 	autoDiscover := opts.AutoDiscover
-	if !autoDiscover && opts.DefsDir == "" && opts.SourcesDir == "" && opts.ImportMapFile == "" {
+	if !autoDiscover && opts.DefsDir == "" && opts.CompiledFile == "" && opts.SourcesDir == "" && opts.ImportMapFile == "" {
 		autoDiscover = true
 	}
 
@@ -143,13 +173,21 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	}
 
 	var (
-		processed  int
-		modified   int
-		errorsList []error
+		processed    int
+		modified     int
+		errorsList   []error
+		renderErrors []RenderError
 	)
 
 	for _, filePath := range htmlFiles {
-		changed, err := transformFile(filePath, dir, registry, engine, opts, cliImportMap, autoDiscover)
+		if opts.Isolate {
+			if err := engine.Reset(); err != nil {
+				errorsList = append(errorsList, fmt.Errorf("resetting engine for %s: %w", filePath, err))
+				processed++
+				continue
+			}
+		}
+		changed, err := transformFile(filePath, dir, registry, engine, opts, cliImportMap, autoDiscover, &renderErrors)
 		processed++
 
 		if err != nil {
@@ -220,12 +258,13 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 		FilesProcessed: processed,
 		FilesModified:  modified,
 		Errors:         errorsList,
+		RenderErrors:   renderErrors,
 		Unregistered:   trulyUnregistered,
 	}, nil
 }
 
 // transformFile reads, transforms, and writes a single HTML file.
-func transformFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options, cliImportMap *jsengine.ImportMap, autoDiscover bool) (bool, error) {
+func transformFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options, cliImportMap *jsengine.ImportMap, autoDiscover bool, renderErrors *[]RenderError) (bool, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return false, fmt.Errorf("reading file: %w", err)
@@ -233,16 +272,22 @@ func transformFile(filePath string, srcDir string, registry *jsengine.Registry, 
 
 	input := string(data)
 
-	// Mode 3 + 4: Discover components from import maps and module scripts
 	htmlDir := filepath.Dir(filePath)
 	if autoDiscover || cliImportMap != nil {
 		discoverFromHTML(input, htmlDir, srcDir, registry, cliImportMap, opts.Verbose)
 	}
 
-	output, err := renderHTMLWithEngine(input, engine, registry, opts.Ignored)
+	ctx := &transformContext{
+		engine:   engine,
+		registry: registry,
+		ignored:  opts.Ignored,
+		file:     filePath,
+	}
+	output, err := renderHTMLWithContext(input, ctx)
 	if err != nil {
 		return false, fmt.Errorf("rendering: %w", err)
 	}
+	*renderErrors = append(*renderErrors, ctx.renderErrors...)
 
 	if output == input && opts.OutDir == "" {
 		return false, nil
@@ -429,8 +474,12 @@ func getTextContent(n *html.Node) string {
 
 // RenderHTML takes an HTML string, finds custom elements, and returns
 // the transformed HTML with Declarative Shadow DOM.
-func RenderHTML(input string, registry *jsengine.Registry) (string, error) {
-	return renderHTMLWithIgnored(input, registry, nil)
+func RenderHTML(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
+	var ign map[string]bool
+	if len(ignored) > 0 {
+		ign = ignored[0]
+	}
+	return renderHTMLWithIgnored(input, registry, ign)
 }
 
 func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
@@ -442,14 +491,29 @@ func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored ma
 	return renderHTMLWithEngine(input, engine, registry, ignored)
 }
 
+// transformContext carries shared state through the recursive transform walk.
+type transformContext struct {
+	engine       *jsengine.Engine
+	registry     *jsengine.Registry
+	ignored      map[string]bool
+	file         string // current HTML file path (for error reporting)
+	renderErrors []RenderError
+}
+
 // renderHTMLWithEngine transforms HTML using a provided engine (no create/destroy overhead).
 func renderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
+	output, err := renderHTMLWithContext(input, ctx)
+	return output, err
+}
+
+func renderHTMLWithContext(input string, ctx *transformContext) (string, error) {
 	doc, err := html.Parse(strings.NewReader(input))
 	if err != nil {
 		return "", fmt.Errorf("parsing HTML: %w", err)
 	}
 
-	if err := transformNode(doc, engine, registry, ignored, 0, 10); err != nil {
+	if err := renderHTMLBatched(doc, ctx, 10); err != nil {
 		return "", err
 	}
 
@@ -466,8 +530,12 @@ func renderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jseng
 }
 
 // RenderFragment renders an HTML fragment.
-func RenderFragment(input string, registry *jsengine.Registry) (string, error) {
-	return renderFragmentWithIgnored(input, registry, nil)
+func RenderFragment(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
+	var ign map[string]bool
+	if len(ignored) > 0 {
+		ign = ignored[0]
+	}
+	return renderFragmentWithIgnored(input, registry, ign)
 }
 
 func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
@@ -484,15 +552,21 @@ func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignore
 	}
 	defer engine.Close()
 
+	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
+
+	// Wrap nodes in a temporary parent for batch rendering
+	wrapper := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
 	for _, node := range nodes {
-		if err := transformNode(node, engine, registry, ignored, 0, 10); err != nil {
-			return "", err
-		}
+		wrapper.AppendChild(node)
+	}
+
+	if err := renderHTMLBatched(wrapper, ctx, 10); err != nil {
+		return "", err
 	}
 
 	var buf bytes.Buffer
-	for _, node := range nodes {
-		if err := html.Render(&buf, node); err != nil {
+	for child := wrapper.FirstChild; child != nil; child = child.NextSibling {
+		if err := html.Render(&buf, child); err != nil {
 			return "", fmt.Errorf("rendering: %w", err)
 		}
 	}
@@ -500,7 +574,7 @@ func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignore
 }
 
 // transformNode recursively walks the HTML tree and expands custom elements.
-func transformNode(node *html.Node, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool, depth, maxDepth int) error {
+func transformNode(node *html.Node, ctx *transformContext, depth, maxDepth int) error {
 	if depth > maxDepth {
 		return nil
 	}
@@ -511,28 +585,25 @@ func transformNode(node *html.Node, engine *jsengine.Engine, registry *jsengine.
 	}
 
 	if node.Type == html.ElementNode && strings.Contains(node.Data, "-") {
-		if ignored[node.Data] {
+		if ctx.ignored[node.Data] {
 			// Explicitly ignored, skip SSR
 		} else if hasDeclarativeShadowRoot(node) {
 			// Already SSR'd, skip
-		} else if engine.LoadBundleForTag(node.Data, registry) {
-			if err := expandCustomElement(node, engine, registry, ignored, depth, maxDepth); err != nil {
+		} else if ctx.engine.LoadBundleForTag(node.Data, ctx.registry) {
+			if err := expandCustomElement(node, ctx, depth, maxDepth); err != nil {
 				return fmt.Errorf("expanding <%s>: %w", node.Data, err)
 			}
-		} else if engine.IsRegistered(node.Data) {
-			// Sub-component registered by a parent bundle (e.g. rh-accordion-header
-			// from rh-accordion). Try rendering it directly.
-			if err := expandCustomElement(node, engine, registry, ignored, depth, maxDepth); err != nil {
-				// Render failed (no render method, etc.) — that's fine, skip silently
+		} else if ctx.engine.IsRegistered(node.Data) {
+			if err := expandCustomElement(node, ctx, depth, maxDepth); err != nil {
+				// Sub-component render failed — already tracked in ctx.renderErrors
 			}
 		} else {
-			// Truly unknown custom element — not in registry and not defined in QJS
-			registry.MarkUnregistered(node.Data)
+			ctx.registry.MarkUnregistered(node.Data)
 		}
 	}
 
 	for _, child := range originalChildren {
-		if err := transformNode(child, engine, registry, ignored, depth, maxDepth); err != nil {
+		if err := transformNode(child, ctx, depth, maxDepth); err != nil {
 			return err
 		}
 	}
@@ -541,17 +612,19 @@ func transformNode(node *html.Node, engine *jsengine.Engine, registry *jsengine.
 }
 
 // expandCustomElement renders a component and adds DSD.
-func expandCustomElement(node *html.Node, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool, depth, maxDepth int) error {
-	// Collect attributes from the HTML element
+func expandCustomElement(node *html.Node, ctx *transformContext, depth, maxDepth int) error {
 	attrs := make(map[string]string)
 	for _, attr := range node.Attr {
 		attrs[attr.Key] = attr.Val
 	}
 
-	// Render the element using QJS
-	result, err := engine.RenderElement(node.Data, attrs)
+	result, err := ctx.engine.RenderElement(node.Data, attrs)
 	if err != nil {
-		// On render error, leave the element as-is for client-side rendering
+		ctx.renderErrors = append(ctx.renderErrors, RenderError{
+			TagName: node.Data,
+			File:    ctx.file,
+			Err:     err,
+		})
 		return nil
 	}
 
@@ -586,9 +659,8 @@ func expandCustomElement(node *html.Node, engine *jsengine.Engine, registry *jse
 		templateNode.AppendChild(sn)
 	}
 
-	// Recursively transform nested custom elements in the shadow DOM
 	for child := templateNode.FirstChild; child != nil; child = child.NextSibling {
-		if err := transformNode(child, engine, registry, ignored, depth+1, maxDepth); err != nil {
+		if err := transformNode(child, ctx, depth+1, maxDepth); err != nil {
 			return err
 		}
 	}
@@ -605,6 +677,126 @@ func expandCustomElement(node *html.Node, engine *jsengine.Engine, registry *jse
 		node.AppendChild(templateNode)
 	}
 
+	return nil
+}
+
+// pendingElement tracks a custom element waiting to be expanded in batch mode.
+type pendingElement struct {
+	node  *html.Node
+	depth int
+}
+
+// collectUnexpanded walks the HTML tree and returns all custom elements
+// that haven't been expanded yet (no <template shadowrootmode> child).
+func collectUnexpanded(node *html.Node, ctx *transformContext) []pendingElement {
+	var pending []pendingElement
+	var walk func(*html.Node, int)
+	walk = func(n *html.Node, depth int) {
+		if depth > 10 {
+			return
+		}
+		if n.Type == html.ElementNode && strings.Contains(n.Data, "-") {
+			if !ctx.ignored[n.Data] && !hasDeclarativeShadowRoot(n) {
+				if ctx.engine.LoadBundleForTag(n.Data, ctx.registry) || ctx.engine.IsRegistered(n.Data) {
+					pending = append(pending, pendingElement{node: n, depth: depth})
+					return // don't recurse into this node's children yet
+				}
+				ctx.registry.MarkUnregistered(n.Data)
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			walk(child, depth)
+		}
+	}
+	walk(node, 0)
+	return pending
+}
+
+// renderHTMLBatched uses BFS-by-depth to render all custom elements,
+// batching all elements at each depth level into a single QJS Eval call.
+func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) error {
+	for depth := 0; depth < maxDepth; depth++ {
+		pending := collectUnexpanded(doc, ctx)
+		if len(pending) == 0 {
+			break
+		}
+
+		requests := make([]jsengine.BatchRequest, len(pending))
+		for i, p := range pending {
+			attrs := make(map[string]string)
+			for _, attr := range p.node.Attr {
+				attrs[attr.Key] = attr.Val
+			}
+			requests[i] = jsengine.BatchRequest{
+				ID:      i,
+				TagName: p.node.Data,
+				Attrs:   attrs,
+			}
+		}
+
+		results, err := ctx.engine.RenderBatch(requests)
+		if err != nil {
+			return fmt.Errorf("batch render at depth %d: %w", depth, err)
+		}
+
+		resultMap := make(map[int]jsengine.BatchResult, len(results))
+		for _, r := range results {
+			resultMap[r.ID] = r
+		}
+
+		for i, p := range pending {
+			r, ok := resultMap[i]
+			if !ok {
+				continue
+			}
+			if r.Error != "" {
+				ctx.renderErrors = append(ctx.renderErrors, RenderError{
+					TagName: p.node.Data,
+					File:    ctx.file,
+					Err:     fmt.Errorf("%s", r.Error),
+				})
+				continue
+			}
+
+			var shadowContent strings.Builder
+			if r.CSS != "" {
+				shadowContent.WriteString("<style>")
+				shadowContent.WriteString(strings.TrimSpace(r.CSS))
+				shadowContent.WriteString("</style>")
+			}
+			shadowContent.WriteString(r.HTML)
+
+			shadowNodes, err := html.ParseFragment(
+				strings.NewReader(shadowContent.String()),
+				&html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body},
+			)
+			if err != nil {
+				continue
+			}
+
+			templateNode := &html.Node{
+				Type: html.ElementNode, Data: "template", DataAtom: atom.Template,
+				Attr: []html.Attribute{
+					{Key: "shadowroot", Val: "open"},
+					{Key: "shadowrootmode", Val: "open"},
+				},
+			}
+
+			for _, sn := range shadowNodes {
+				templateNode.AppendChild(sn)
+			}
+
+			if depth > 0 {
+				p.node.Attr = append(p.node.Attr, html.Attribute{Key: "defer-hydration"})
+			}
+
+			if p.node.FirstChild != nil {
+				p.node.InsertBefore(templateNode, p.node.FirstChild)
+			} else {
+				p.node.AppendChild(templateNode)
+			}
+		}
+	}
 	return nil
 }
 

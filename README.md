@@ -198,6 +198,45 @@ golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 
 Print the version.
 
+## Library Usage
+
+golit can be used as a Go library. Import `github.com/sspriggs/golit` and use the `Renderer` type:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/sspriggs/golit"
+)
+
+func main() {
+	renderer, err := golit.NewRenderer(golit.RendererOptions{
+		DefsDir: "bundles/",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer renderer.Close()
+
+	output, err := renderer.RenderFragment(`<my-el name="World"></my-el>`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(output)
+}
+```
+
+The `Renderer` exposes three rendering methods:
+
+- `RenderFragment(html)` -- Render an HTML fragment
+- `RenderHTML(html)` -- Render a full HTML document
+- `TransformDir(dir)` -- Process all HTML files in a directory
+
+For lower-level control, use the `pkg/jsengine` and `pkg/transformer` packages directly.
+
 ## How It Works
 
 ```
