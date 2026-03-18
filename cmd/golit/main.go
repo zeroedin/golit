@@ -20,7 +20,7 @@ import (
 	"github.com/sspriggs/golit/pkg/transformer"
 )
 
-const version = "0.2.0"
+const version = "0.0.1"
 
 func main() {
 	if len(os.Args) < 2 {

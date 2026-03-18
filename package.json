@@ -1,6 +1,6 @@
 {
   "name": "golit",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "**Lit SSR in pure Go.** Server-side render Lit web components into [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom) HTML -- no Node.js required.",
   "main": "index.js",
   "scripts": {
