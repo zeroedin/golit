@@ -191,6 +191,56 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	return nil
 }
 
+// LoadCompiled loads a single pre-compiled .golit.compiled.js artifact
+// that contains all bundles and a __golitRegistry manifest.
+func (r *Registry) LoadCompiled(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading compiled artifact %s: %w", path, err)
+	}
+
+	content := string(data)
+
+	engine, err := NewEngine()
+	if err != nil {
+		return err
+	}
+	defer engine.Close()
+
+	if err := engine.LoadBundle(content); err != nil {
+		return fmt.Errorf("loading compiled artifact: %w", err)
+	}
+
+	result, err := engine.ctx.Eval("registry.js", qjs.Code(`
+		(function() {
+			if (globalThis.__golitRegistry) {
+				return JSON.stringify(Object.keys(globalThis.__golitRegistry));
+			}
+			var reg = customElements;
+			if (reg && reg.__definitions) {
+				var names = [];
+				for (var entry of reg.__definitions) { names.push(entry[0]); }
+				return JSON.stringify(names);
+			}
+			return '[]';
+		})();
+	`))
+	if err != nil {
+		return fmt.Errorf("querying compiled registry: %w", err)
+	}
+
+	var names []string
+	if err := json.Unmarshal([]byte(result.String()), &names); err != nil {
+		return fmt.Errorf("parsing compiled registry: %w", err)
+	}
+
+	for _, name := range names {
+		r.bundles[name] = content
+	}
+
+	return nil
+}
+
 // DiscoverTagName loads a bundle in a temporary QJS context and checks
 // which tag name was registered via customElements.define().
 func DiscoverTagName(bundle string) (string, error) {

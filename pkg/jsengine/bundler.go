@@ -470,6 +470,74 @@ func buildPlugins(opt BundleOptions) []api.Plugin {
 	}
 }
 
+// BundleSource bundles a component from inline JS/TS source code (no file on disk).
+// Uses esbuild's Stdin option instead of EntryPoints.
+func BundleSource(source string, opts ...BundleOptions) (string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	shimDir, err := os.MkdirTemp("", "golit-shim-*")
+	if err != nil {
+		return "", fmt.Errorf("creating temp dir: %w", err)
+	}
+	defer os.RemoveAll(shimDir)
+
+	shimPath := filepath.Join(shimDir, "domshim.js")
+	if err := os.WriteFile(shimPath, []byte(DOMShimJS), 0644); err != nil {
+		return "", fmt.Errorf("writing DOM shim: %w", err)
+	}
+	collectorPath := filepath.Join(shimDir, "templatecollector.js")
+	if err := os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644); err != nil {
+		return "", fmt.Errorf("writing template collector: %w", err)
+	}
+
+	cwd, _ := os.Getwd()
+	nodeModulesDir := findNodeModules(filepath.Join(cwd, "dummy"))
+
+	result := api.Build(api.BuildOptions{
+		Stdin: &api.StdinOptions{
+			Contents:   source,
+			ResolveDir: cwd,
+			Loader:     api.LoaderTS,
+		},
+		Bundle:           true,
+		Format:           api.FormatESModule,
+		Target:           api.ES2022,
+		Platform:         api.PlatformNeutral,
+		Inject:           []string{shimPath, collectorPath},
+		Write:            false,
+		MinifyWhitespace: opt.Minify,
+		MinifySyntax:     opt.Minify,
+		NodePaths:        []string{nodeModulesDir},
+		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:          buildPlugins(opt),
+		Conditions:       []string{"node"},
+		LogLevel:         api.LogLevelSilent,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return "", fmt.Errorf("esbuild bundle errors: %s", strings.Join(msgs, "; "))
+	}
+
+	if len(result.OutputFiles) == 0 {
+		return "", fmt.Errorf("esbuild produced no output")
+	}
+
+	code := string(result.OutputFiles[0].Contents)
+	code, hasTopLevelAwait := stripESMExports(code)
+	if hasTopLevelAwait {
+		code = "(async () => {\n" + code + "\n})();\n"
+	}
+
+	return code, nil
+}
+
 // BundlePreload bundles a module and wraps it so its exports are registered
 // in the __preloadedModules registry under the given name.
 // Unlike BundleComponent, this captures ESM exports into the registry
