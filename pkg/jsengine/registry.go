@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 
@@ -253,11 +255,7 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	}
 
 	// Phase 3: discover tag names and register (regex fast path + batched QJS fallback)
-	bundleList := make([]string, 0, len(bundles))
-	for _, b := range bundles {
-		bundleList = append(bundleList, b)
-	}
-	return r.registerBundles(bundleList)
+	return r.registerBundles(slices.Collect(maps.Values(bundles)))
 }
 
 // LoadCompiled loads a single pre-compiled .golit.compiled.js artifact
