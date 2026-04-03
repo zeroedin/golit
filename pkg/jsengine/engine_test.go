@@ -105,10 +105,3 @@ func TestEngine_UnregisteredElement(t *testing.T) {
 		t.Error("expected error for unregistered element")
 	}
 }
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
