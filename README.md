@@ -35,7 +35,7 @@ The browser still uses your CDN import map at runtime for hydration and interact
 ### Install
 
 ```bash
-go install github.com/sspriggs/golit/cmd/golit@latest
+go install github.com/zeroedin/golit/cmd/golit@latest
 ```
 
 ### The simplest workflow (zero config)
@@ -201,7 +201,7 @@ Print the version.
 
 ## Library Usage
 
-golit can be used as a Go library. Import `github.com/sspriggs/golit` and use the `Renderer` type:
+golit can be used as a Go library. Import `github.com/zeroedin/golit` and use the `Renderer` type:
 
 ```go
 package main
@@ -210,7 +210,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/sspriggs/golit"
+	"github.com/zeroedin/golit"
 )
 
 func main() {

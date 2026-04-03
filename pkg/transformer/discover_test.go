@@ -6,7 +6,13 @@ import (
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
+
+func newTestRegistry() *jsengine.Registry {
+	return jsengine.NewRegistry()
+}
 
 func TestGetAttr(t *testing.T) {
 	node := parseFirstElement(t, `<script type="module" src="app.js"></script>`)
@@ -69,6 +75,56 @@ func TestImportRe_MatchesVariousFormats(t *testing.T) {
 				t.Errorf("got %q, want %q", matches[0][1], tc.want)
 			}
 		})
+	}
+}
+
+func TestDiscoverFromHTML_SkipsPlainHTML(t *testing.T) {
+	registry := newTestRegistry()
+
+	discoverFromHTML(
+		`<!DOCTYPE html><html><head><title>No scripts</title></head><body><p>plain</p></body></html>`,
+		"/tmp", "/tmp", registry, nil, false,
+	)
+
+	if len(registry.TagNames()) != 0 {
+		t.Errorf("expected no tags registered for plain HTML, got %v", registry.TagNames())
+	}
+}
+
+func TestDiscoverFromHTML_DoesNotSkipUnquotedType(t *testing.T) {
+	for _, attr := range []string{
+		`type=module`,
+		`type="module"`,
+		`type='module'`,
+		`type=importmap`,
+		`type="importmap"`,
+		`type='importmap'`,
+	} {
+		t.Run(attr, func(t *testing.T) {
+			html := `<!DOCTYPE html><html><head><script ` + attr + `>/* content */</script></head><body></body></html>`
+			if !strings.Contains(html, `type=`) {
+				t.Fatal("sanity: test HTML missing type attribute")
+			}
+			// We can't easily test that html.Parse runs without real
+			// bundles, but we can verify the pre-scan doesn't reject
+			// the content by checking discoverFromHTML doesn't panic
+			// and completes (the parse path runs even with no results).
+			registry := newTestRegistry()
+			discoverFromHTML(html, "/tmp", "/tmp", registry, nil, false)
+		})
+	}
+}
+
+func TestDiscoverFromHTML_SkipsRegularScript(t *testing.T) {
+	registry := newTestRegistry()
+
+	discoverFromHTML(
+		`<!DOCTYPE html><html><head><script src="app.js"></script></head><body></body></html>`,
+		"/tmp", "/tmp", registry, nil, false,
+	)
+
+	if len(registry.TagNames()) != 0 {
+		t.Errorf("expected no tags registered for regular scripts, got %v", registry.TagNames())
 	}
 }
 

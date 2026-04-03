@@ -59,7 +59,11 @@ func NewEngine() (*Engine, error) {
 // global scope once, so they don't need to be re-sent with every
 // RenderElement call.
 func (e *Engine) initHelpers() error {
-	_, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS))
+	if _, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS)); err != nil {
+		return err
+	}
+	_, err := e.ctx.Eval("css-cache-init.js", qjs.Code(
+		`if(!globalThis.__cssCache)globalThis.__cssCache=new Map();`))
 	return err
 }
 
@@ -106,6 +110,14 @@ func (e *Engine) LoadBundle(bundle string) error {
 	return nil
 }
 
+// shimPattern holds a pre-computed (module, quote-style) pair so the
+// scan loop in shimDynamicImports avoids per-iteration allocations.
+type shimPattern struct {
+	prefix string // e.g. `import("prism-esm`
+	close  string // e.g. `")`
+	mod    string
+}
+
 // shimDynamicImports replaces dynamic import("module") expressions with
 // Promise.resolve(globalThis.__preloadedModules["module"]) for preloaded modules.
 // Handles both quote styles and subpath imports (e.g. import("mod/sub.js")).
@@ -114,13 +126,21 @@ func (e *Engine) shimDynamicImports(code string) string {
 		return code
 	}
 
-	const prefix = "import("
+	patterns := make([]shimPattern, 0, len(e.preloadModules)*2)
+	for _, mod := range e.preloadModules {
+		patterns = append(patterns,
+			shimPattern{prefix: `import("` + mod, close: `")`, mod: mod},
+			shimPattern{prefix: `import('` + mod, close: `')`, mod: mod},
+		)
+	}
+
+	const importOpen = "import("
 	var b strings.Builder
 	b.Grow(len(code) + len(code)/10)
 
 	pos := 0
 	for {
-		idx := strings.Index(code[pos:], prefix)
+		idx := strings.Index(code[pos:], importOpen)
 		if idx < 0 {
 			b.WriteString(code[pos:])
 			break
@@ -130,36 +150,36 @@ func (e *Engine) shimDynamicImports(code string) string {
 		matchStart := pos + idx
 		matched := false
 
-		for _, mod := range e.preloadModules {
-			for _, q := range []byte{'"', '\''} {
-				modPrefix := prefix + string(q) + mod
-				if matchStart+len(modPrefix) > len(code) ||
-					code[matchStart:matchStart+len(modPrefix)] != modPrefix {
-					continue
-				}
-				closeStr := string(q) + ")"
-				end := strings.Index(code[matchStart+len(modPrefix):], closeStr)
-				if end < 0 {
-					continue
-				}
-				full := code[matchStart : matchStart+len(modPrefix)+end+2]
-				b.WriteString(`Promise.resolve(globalThis.__preloadedModules["`)
-				b.WriteString(mod)
-				b.WriteString(`"] || {})/*golit-shimmed:`)
-				b.WriteString(full)
-				b.WriteString(`*/`)
-				pos = matchStart + len(full)
-				matched = true
-				break
+		for _, p := range patterns {
+			if matchStart+len(p.prefix) > len(code) ||
+				code[matchStart:matchStart+len(p.prefix)] != p.prefix {
+				continue
 			}
-			if matched {
-				break
+			// Boundary check: the char after the module name must be
+			// the closing quote (exact match) or '/' (subpath import).
+			// Without this, preloading "lit" would also match "lit-html".
+			nextChar := code[matchStart+len(p.prefix)]
+			if nextChar != p.close[0] && nextChar != '/' {
+				continue
 			}
+			end := strings.Index(code[matchStart+len(p.prefix):], p.close)
+			if end < 0 {
+				continue
+			}
+			full := code[matchStart : matchStart+len(p.prefix)+end+len(p.close)]
+			b.WriteString(`Promise.resolve(globalThis.__preloadedModules["`)
+			b.WriteString(p.mod)
+			b.WriteString(`"] || {})/*golit-shimmed:`)
+			b.WriteString(full)
+			b.WriteString(`*/`)
+			pos = matchStart + len(full)
+			matched = true
+			break
 		}
 
 		if !matched {
-			b.WriteString(prefix)
-			pos = matchStart + len(prefix)
+			b.WriteString(importOpen)
+			pos = matchStart + len(importOpen)
 		}
 	}
 
@@ -226,10 +246,12 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 				}
 
 				let css = '';
-				if (Ctor.styles) {
-					css = extractStyles(Ctor.styles);
-				} else if (Ctor.elementStyles) {
-					css = extractStyles(Ctor.elementStyles);
+				if (globalThis.__cssCache.has(Ctor)) {
+					css = globalThis.__cssCache.get(Ctor);
+				} else {
+					if (Ctor.styles) { css = extractStyles(Ctor.styles); }
+					else if (Ctor.elementStyles) { css = extractStyles(Ctor.elementStyles); }
+					globalThis.__cssCache.set(Ctor, css);
 				}
 
 				return JSON.stringify({ html, css, tagName: '%s' });
@@ -286,6 +308,25 @@ type BatchResult struct {
 // RenderBatch renders multiple custom elements in a single QJS Eval call,
 // reducing Go-to-JS boundary crossings. Each element is still rendered
 // individually within QJS; the batching is at the transport layer only.
+const batchRenderSuffix = `;const results=[];` +
+	`for(const req of requests){` +
+	`const Ctor=customElements.get(req.tagName);` +
+	`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered',tagName:req.tagName});continue;}` +
+	`try{` +
+	`const el=new Ctor();` +
+	`for(const [key,value] of Object.entries(req.attrs||{})){` +
+	`el.setAttribute(key,value);` +
+	`const propName=attributeToProperty(Ctor,key);` +
+	`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
+	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render());}` +
+	`let css='';if(globalThis.__cssCache.has(Ctor)){css=globalThis.__cssCache.get(Ctor);}` +
+	`else{if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
+	`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
+	`globalThis.__cssCache.set(Ctor,css);}` +
+	`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
+	`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
+	`return JSON.stringify(results);})();`
+
 func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 	if len(requests) == 0 {
 		return nil, nil
@@ -296,43 +337,13 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		return nil, fmt.Errorf("marshaling batch requests: %w", err)
 	}
 
-	script := fmt.Sprintf(`
-		(function() {
-			const requests = %s;
-			const results = [];
-			for (const req of requests) {
-				const Ctor = customElements.get(req.tagName);
-				if (!Ctor) {
-					results.push({ id: req.id, error: 'Element <' + req.tagName + '> not registered' });
-					continue;
-				}
-				try {
-					const el = new Ctor();
-					for (const [key, value] of Object.entries(req.attrs || {})) {
-						el.setAttribute(key, value);
-						const propName = attributeToProperty(Ctor, key);
-						if (propName) {
-							const propConfig = getPropertyConfig(Ctor, propName);
-							el[propName] = coerceValue(value, propConfig);
-						}
-					}
-					let html = '';
-					if (typeof el.render === 'function') {
-						html = __collectTemplateResult(el.render());
-					}
-					let css = '';
-					if (Ctor.styles) { css = extractStyles(Ctor.styles); }
-					else if (Ctor.elementStyles) { css = extractStyles(Ctor.elementStyles); }
-					results.push({ id: req.id, html: html, css: css, tagName: req.tagName });
-				} catch(e) {
-					results.push({ id: req.id, error: e.message, tagName: req.tagName });
-				}
-			}
-			return JSON.stringify(results);
-		})();
-	`, string(reqJSON))
+	var script strings.Builder
+	script.Grow(len(reqJSON) + len(batchRenderSuffix) + 32)
+	script.WriteString("(function(){const requests=")
+	script.Write(reqJSON)
+	script.WriteString(batchRenderSuffix)
 
-	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script))
+	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script.String()))
 	if err != nil {
 		return nil, fmt.Errorf("batch render eval: %w", err)
 	}

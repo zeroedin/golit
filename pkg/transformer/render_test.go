@@ -7,7 +7,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 // mockEngine implements ElementRenderer for testing without QJS.
@@ -307,6 +307,8 @@ func TestExtractBodyContent(t *testing.T) {
 		{`<html><body><p>hi</p></body></html>`, `<p>hi</p>`},
 		{`<html><body></body></html>`, ``},
 		{`no body tags here`, `no body tags here`},
+		{`<html><BODY><p>upper</p></BODY></html>`, `<p>upper</p>`},
+		{`<html><Body><p>mixed</p></Body></html>`, `<p>mixed</p>`},
 	}
 	for _, tc := range cases {
 		if got := extractBodyContent(tc.input); got != tc.want {

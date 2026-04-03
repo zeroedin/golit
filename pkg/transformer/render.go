@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 // RenderHTML takes an HTML string, finds custom elements, and returns
@@ -61,6 +61,7 @@ func renderHTMLWithContext(input string, ctx *transformContext) (string, error) 
 	}
 
 	var buf bytes.Buffer
+	buf.Grow(len(input) + len(input)/2)
 	if err := html.Render(&buf, doc); err != nil {
 		return "", fmt.Errorf("rendering HTML: %w", err)
 	}
@@ -112,6 +113,7 @@ func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *js
 	}
 
 	var buf bytes.Buffer
+	buf.Grow(len(input) + len(input)/2)
 	for child := wrapper.FirstChild; child != nil; child = child.NextSibling {
 		if err := html.Render(&buf, child); err != nil {
 			return "", fmt.Errorf("rendering: %w", err)
@@ -183,16 +185,20 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 			return fmt.Errorf("batch render at depth %d: %w", depth, err)
 		}
 
-		resultMap := make(map[int]jsengine.BatchResult, len(results))
+		resultSlice := make([]jsengine.BatchResult, len(pending))
+		populated := make([]bool, len(pending))
 		for _, r := range results {
-			resultMap[r.ID] = r
+			if r.ID >= 0 && r.ID < len(resultSlice) {
+				resultSlice[r.ID] = r
+				populated[r.ID] = true
+			}
 		}
 
 		for i, p := range pending {
-			r, ok := resultMap[i]
-			if !ok {
+			if !populated[i] {
 				continue
 			}
+			r := resultSlice[i]
 			if r.Error != "" {
 				ctx.renderErrors = append(ctx.renderErrors, RenderError{
 					TagName: p.node.Data,
@@ -258,19 +264,59 @@ func hasDeclarativeShadowRoot(node *html.Node) bool {
 }
 
 func isFullDocument(input string) bool {
-	lower := strings.TrimSpace(strings.ToLower(input))
-	return strings.HasPrefix(lower, "<!doctype") || strings.HasPrefix(lower, "<html")
+	s := strings.TrimLeft(input, " \t\n\r\f")
+	if len(s) < 5 {
+		return false
+	}
+	n := min(15, len(s))
+	prefix := strings.ToLower(s[:n])
+	return strings.HasPrefix(prefix, "<!doctype") || strings.HasPrefix(prefix, "<html")
+}
+
+// indexFold returns the index of the first case-insensitive match of
+// substr in s, or -1 if not found.
+func indexFold(s, substr string) int {
+	n := len(substr)
+	if n == 0 {
+		return 0
+	}
+	if n > len(s) {
+		return -1
+	}
+	for i := 0; i <= len(s)-n; i++ {
+		if strings.EqualFold(s[i:i+n], substr) {
+			return i
+		}
+	}
+	return -1
+}
+
+// lastIndexFold returns the index of the last case-insensitive match
+// of substr in s, or -1 if not found.
+func lastIndexFold(s, substr string) int {
+	n := len(substr)
+	if n == 0 {
+		return len(s)
+	}
+	if n > len(s) {
+		return -1
+	}
+	for i := len(s) - n; i >= 0; i-- {
+		if strings.EqualFold(s[i:i+n], substr) {
+			return i
+		}
+	}
+	return -1
 }
 
 func extractBodyContent(rendered string) string {
-	lower := strings.ToLower(rendered)
-	bodyStart := strings.Index(lower, "<body>")
+	bodyStart := indexFold(rendered, "<body>")
 	if bodyStart == -1 {
 		return rendered
 	}
 	bodyStart += len("<body>")
-	bodyEnd := strings.LastIndex(lower, "</body>")
-	if bodyEnd == -1 {
+	bodyEnd := lastIndexFold(rendered, "</body>")
+	if bodyEnd == -1 || bodyEnd < bodyStart {
 		return rendered
 	}
 	return rendered[bodyStart:bodyEnd]

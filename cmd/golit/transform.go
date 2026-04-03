@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sspriggs/golit/pkg/transformer"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
 func runTransform(args []string) error {

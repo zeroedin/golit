@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 // importRe matches ES module import statements to extract bare-module specifiers.
@@ -21,6 +21,15 @@ var importRe = regexp.MustCompile(`import\s+(?:[^'"]*\s+from\s+)?['"]([^'"]+)['"
 // siteRoot is the top-level directory passed to TransformDir (e.g. "public/"),
 // used to resolve absolute paths like "/node_modules/..." in import maps.
 func discoverFromHTML(htmlContent string, htmlDir string, siteRoot string, registry *jsengine.Registry, cliImportMap *jsengine.ImportMap, verbose bool) {
+	if !strings.Contains(htmlContent, `type="importmap"`) &&
+		!strings.Contains(htmlContent, `type='importmap'`) &&
+		!strings.Contains(htmlContent, `type=importmap`) &&
+		!strings.Contains(htmlContent, `type="module"`) &&
+		!strings.Contains(htmlContent, `type='module'`) &&
+		!strings.Contains(htmlContent, `type=module`) {
+		return
+	}
+
 	doc, err := html.Parse(strings.NewReader(htmlContent))
 	if err != nil {
 		return

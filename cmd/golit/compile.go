@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 func runCompile(args []string) error {

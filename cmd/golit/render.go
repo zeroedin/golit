@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
-	"github.com/sspriggs/golit/pkg/transformer"
+	"github.com/zeroedin/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
 func runRender(args []string) error {
