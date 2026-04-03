@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -314,6 +315,7 @@ func runCompile(args []string) error {
 	if len(tagNames) == 0 {
 		return fmt.Errorf("no components found in %s", defsDir)
 	}
+	sort.Strings(tagNames)
 
 	var compiled strings.Builder
 
