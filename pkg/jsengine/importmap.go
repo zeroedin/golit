@@ -44,7 +44,7 @@ func ParseImportMap(jsonStr string, baseDir string) (*ImportMap, error) {
 // buildPrefixes extracts slash-suffixed keys from Imports and sorts them
 // by length descending so longer (more-specific) prefixes match first.
 func (im *ImportMap) buildPrefixes() {
-	im.prefixes = im.prefixes[:0]
+	im.prefixes = nil
 	for key := range im.Imports {
 		if strings.HasSuffix(key, "/") {
 			im.prefixes = append(im.prefixes, key)
