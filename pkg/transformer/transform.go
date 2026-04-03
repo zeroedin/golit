@@ -409,7 +409,7 @@ func logFileStatus(filePath, dir, outDir string, changed bool) {
 	fmt.Fprintf(os.Stderr, "  %s -> %s [%s]\n", filePath, outPath, status)
 }
 
-func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options) (bool, []RenderError, error) {
+func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine ElementRenderer, opts Options) (bool, []RenderError, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return false, nil, fmt.Errorf("reading file: %w", err)

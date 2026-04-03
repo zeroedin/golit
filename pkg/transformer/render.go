@@ -33,7 +33,7 @@ func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored ma
 
 // transformContext carries shared state through the recursive transform walk.
 type transformContext struct {
-	engine       *jsengine.Engine
+	engine       ElementRenderer
 	registry     *jsengine.Registry
 	ignored      map[string]bool
 	file         string // current HTML file path (for error reporting)
@@ -43,7 +43,7 @@ type transformContext struct {
 // RenderHTMLWithEngine transforms HTML using a caller-provided engine,
 // avoiding engine creation overhead. Use this when you have a long-lived
 // engine (e.g. in a Renderer).
-func RenderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+func RenderHTMLWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
 	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
 	output, err := renderHTMLWithContext(input, ctx)
 	return output, err
@@ -91,7 +91,7 @@ func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignore
 
 // RenderFragmentWithEngine renders an HTML fragment using a caller-provided
 // engine, avoiding engine creation overhead.
-func RenderFragmentWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
 	nodes, err := html.ParseFragment(strings.NewReader(input), &html.Node{
 		Type: html.ElementNode, Data: "body", DataAtom: atom.Body,
 	})
