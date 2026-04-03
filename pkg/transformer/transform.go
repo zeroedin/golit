@@ -6,6 +6,7 @@ package transformer
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -903,15 +904,15 @@ func extractBodyContent(rendered string) string {
 
 func collectHTMLFiles(dir string) ([]string, error) {
 	var files []string
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
-		if strings.HasSuffix(strings.ToLower(info.Name()), ".html") ||
-			strings.HasSuffix(strings.ToLower(info.Name()), ".htm") {
+		name := strings.ToLower(d.Name())
+		if strings.HasSuffix(name, ".html") || strings.HasSuffix(name, ".htm") {
 			files = append(files, path)
 		}
 		return nil

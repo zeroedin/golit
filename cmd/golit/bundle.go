@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,15 +89,15 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 	}
 
 	var paths []string
-	if err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "golit: warning: skipping %s: %v\n", path, err)
 			return nil
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
-		name := info.Name()
+		name := d.Name()
 		if strings.HasSuffix(name, ".d.ts") {
 			return nil
 		}

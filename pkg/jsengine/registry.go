@@ -3,6 +3,7 @@ package jsengine
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -219,17 +220,17 @@ func (r *Registry) ProcessedPaths() []string {
 func (r *Registry) LoadSourceDir(dir string) error {
 	// Phase 1: collect all source file paths
 	var paths []string
-	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "golit: warning: skipping %s: %v\n", path, err)
 			return nil
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
-		name := info.Name()
+		name := d.Name()
 		if strings.HasSuffix(name, ".d.ts") || strings.HasSuffix(name, ".golit.bundle.js") {
-			return nil // skip declaration files and already-bundled files
+			return nil
 		}
 		ext := filepath.Ext(name)
 		if ext != ".js" && ext != ".ts" && ext != ".tsx" {
