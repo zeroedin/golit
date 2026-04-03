@@ -38,6 +38,22 @@ func BundleComponent(componentPath string, opts ...BundleOptions) (string, error
 }
 
 func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
+	esm, err := bundleComponentRaw(componentPath, opt)
+	if err != nil {
+		return "", err
+	}
+
+	code, hasTopLevelAwait := stripESMExports(esm)
+	if hasTopLevelAwait {
+		code = "(async () => {\n" + code + "\n})();\n"
+	}
+
+	return code, nil
+}
+
+// bundleComponentRaw runs esbuild and returns the raw ESM output before
+// any post-processing (export stripping, async wrapping).
+func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error) {
 	absPath, err := filepath.Abs(componentPath)
 	if err != nil {
 		return "", fmt.Errorf("resolving path: %w", err)
@@ -47,7 +63,6 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 		return "", fmt.Errorf("component file not found: %s", absPath)
 	}
 
-	// Write the DOM shim to a temp file for esbuild's inject
 	shimDir, err := os.MkdirTemp("", "golit-shim-*")
 	if err != nil {
 		return "", fmt.Errorf("creating temp dir: %w", err)
@@ -64,36 +79,25 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 		return "", fmt.Errorf("writing template collector: %w", err)
 	}
 
-	// Find node_modules relative to the component or workspace
 	nodeModulesDir := findNodeModules(absPath)
-
-	// Determine the source directory for resolving relative CSS imports
 	sourceDir := filepath.Dir(absPath)
 
-	// Build with esbuild
 	result := api.Build(api.BuildOptions{
-		EntryPoints: []string{absPath},
-		Bundle:      true,
-		Format: api.FormatESModule,
-		Target: api.ES2022,
-		Platform:    api.PlatformNeutral,
-		// Inject DOM shim and template collector before the component code
+		EntryPoints:      []string{absPath},
+		Bundle:           true,
+		Format:           api.FormatESModule,
+		Target:           api.ES2022,
+		Platform:         api.PlatformNeutral,
 		Inject:           []string{shimPath, collectorPath},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
 		NodePaths:        []string{nodeModulesDir},
-		// Use legacy decorators so the compiled output uses __decorate()
-		// instead of TC39 standard decorators which QuickJS doesn't support.
-		TsconfigRaw: `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
-		Plugins: buildPlugins(opt),
-		// Use Node.js export conditions so Lit's isServer is true
-		// and other SSR-specific code paths are activated.
-		Conditions: []string{"node"},
-		LogLevel:   api.LogLevelSilent,
-
-		// Ensure we don't use sourceDir variable outside closure
-		AbsWorkingDir: sourceDir,
+		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:          buildPlugins(opt),
+		Conditions:       []string{"node"},
+		LogLevel:         api.LogLevelSilent,
+		AbsWorkingDir:    sourceDir,
 	})
 
 	if len(result.Errors) > 0 {
@@ -108,17 +112,7 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 		return "", fmt.Errorf("esbuild produced no output")
 	}
 
-	code := string(result.OutputFiles[0].Contents)
-
-	// Post-process ESM output for QJS script-mode evaluation:
-	// 1. Strip export keywords (all imports are already bundled in)
-	// 2. Wrap in async IIFE if top-level await is present
-	code, hasTopLevelAwait := stripESMExports(code)
-	if hasTopLevelAwait {
-		code = "(async () => {\n" + code + "\n})();\n"
-	}
-
-	return code, nil
+	return string(result.OutputFiles[0].Contents), nil
 }
 
 // stripESMExports removes export keywords from bundled ESM output so it
@@ -452,93 +446,87 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 // Unlike BundleComponent, this captures ESM exports into the registry
 // instead of stripping them.
 func BundlePreload(modulePath string, name string) (string, error) {
-	// Bundle with esbuild (same as BundleComponent but we handle exports differently)
-	raw, err := bundleComponent(modulePath, BundleOptions{})
+	esm, err := bundleComponentRaw(modulePath, BundleOptions{})
 	if err != nil {
 		return "", err
 	}
 
-	// The raw bundle has had stripESMExports applied, which converted:
-	//   export { Foo, Bar } → (deleted)
-	//   export const X = ... → const X = ...
-	//   export function Y() → function Y()
-	// The exported names are now local variables/functions.
-	// We need to re-bundle WITHOUT stripping to find the export names,
-	// then add code to capture them.
+	exportNames := extractESMExportNames(esm)
 
-	// Re-bundle to get the unstripped ESM output and find export names
-	absPath, _ := filepath.Abs(modulePath)
-	shimDir, _ := os.MkdirTemp("", "golit-preload-*")
-	defer os.RemoveAll(shimDir)
-	shimPath := filepath.Join(shimDir, "domshim.js")
-	os.WriteFile(shimPath, []byte(DOMShimJS), 0644)
-	collectorPath := filepath.Join(shimDir, "templatecollector.js")
-	os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644)
-	nodeModulesDir := findNodeModules(absPath)
-
-	result := api.Build(api.BuildOptions{
-		EntryPoints:   []string{absPath},
-		Bundle:        true,
-		Format:        api.FormatESModule,
-		Target:        api.ES2022,
-		Platform:      api.PlatformNeutral,
-		Inject:        []string{shimPath, collectorPath},
-		Write:         false,
-		NodePaths:     []string{nodeModulesDir},
-		TsconfigRaw:   `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
-		Plugins:       buildPlugins(BundleOptions{}),
-		Conditions:    []string{"node"},
-		LogLevel:      api.LogLevelSilent,
-		AbsWorkingDir: filepath.Dir(absPath),
-	})
-
-	if len(result.Errors) > 0 || len(result.OutputFiles) == 0 {
-		// Fall back to the stripped bundle with empty registry
-		return raw + "\n" + fmt.Sprintf(`globalThis.__preloadedModules[%q] = {};`, name) + "\n", nil
+	code, hasTopLevelAwait := stripESMExports(esm)
+	if hasTopLevelAwait {
+		code = "(async () => {\n" + code + "\n})();\n"
 	}
 
-	esmCode := string(result.OutputFiles[0].Contents)
-
-	// Extract exported names from the ESM output.
-	// Look for: export { Foo, Bar, Baz };  or  export { Foo as default };
-	var exportNames []string
-	for _, line := range strings.Split(esmCode, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "export {") || strings.HasPrefix(trimmed, "export{") {
-			// Extract names between { and }
-			start := strings.Index(trimmed, "{")
-			end := strings.LastIndex(trimmed, "}")
-			if start >= 0 && end > start {
-				body := trimmed[start+1 : end]
-				for _, part := range strings.Split(body, ",") {
-					part = strings.TrimSpace(part)
-					if part == "" {
-						continue
-					}
-					// Handle "Foo as Bar" — use the local name (Foo)
-					if idx := strings.Index(part, " as "); idx >= 0 {
-						exportNames = append(exportNames, strings.TrimSpace(part[:idx]))
-					} else {
-						exportNames = append(exportNames, part)
-					}
-				}
-			}
-		}
-	}
-
-	// Build the capture code: assign each exported name to the registry
 	var capture strings.Builder
 	capture.WriteString(fmt.Sprintf("\nglobalThis.__preloadedModules[%q] = {", name))
 	for i, n := range exportNames {
 		if i > 0 {
 			capture.WriteString(", ")
 		}
-		// Use try/catch in case the name doesn't exist as a variable
 		capture.WriteString(fmt.Sprintf("%s: (typeof %s !== 'undefined' ? %s : undefined)", n, n, n))
 	}
 	capture.WriteString("};\n")
 
-	return raw + capture.String(), nil
+	return code + capture.String(), nil
+}
+
+// extractESMExportNames parses export declarations from raw ESM output and
+// returns the local names. Handles single-line and multi-line export blocks
+// as well as "Foo as Bar" aliases (returning the local name).
+func extractESMExportNames(esm string) []string {
+	var names []string
+	inBlock := false
+	for _, line := range strings.Split(esm, "\n") {
+		trimmed := strings.TrimSpace(line)
+
+		if inBlock {
+			if strings.Contains(trimmed, "}") {
+				// Final line of multi-line export block
+				body := trimmed[:strings.Index(trimmed, "}")]
+				names = append(names, parseExportList(body)...)
+				inBlock = false
+			} else {
+				names = append(names, parseExportList(trimmed)...)
+			}
+			continue
+		}
+
+		if !strings.HasPrefix(trimmed, "export {") && !strings.HasPrefix(trimmed, "export{") {
+			continue
+		}
+
+		if strings.Contains(trimmed, "}") {
+			start := strings.Index(trimmed, "{")
+			end := strings.LastIndex(trimmed, "}")
+			if start >= 0 && end > start {
+				names = append(names, parseExportList(trimmed[start+1:end])...)
+			}
+		} else {
+			start := strings.Index(trimmed, "{")
+			if start >= 0 {
+				names = append(names, parseExportList(trimmed[start+1:])...)
+			}
+			inBlock = true
+		}
+	}
+	return names
+}
+
+func parseExportList(body string) []string {
+	var names []string
+	for _, part := range strings.Split(body, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if idx := strings.Index(part, " as "); idx >= 0 {
+			names = append(names, strings.TrimSpace(part[:idx]))
+		} else {
+			names = append(names, part)
+		}
+	}
+	return names
 }
 
 // ResolveModulePath resolves a bare module specifier to a file path by
