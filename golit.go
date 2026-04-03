@@ -93,14 +93,15 @@ func (r *Renderer) RenderFragment(input string) (string, error) {
 	return transformer.RenderFragmentWithEngine(input, r.engine, r.registry, r.ignored)
 }
 
-// TransformDir processes all HTML files in a directory tree.
+// TransformDir processes all HTML files in a directory tree using the
+// Renderer's pre-loaded registry and ignored list.
 func (r *Renderer) TransformDir(dir string, opts ...transformer.Options) (*transformer.Result, error) {
 	o := transformer.Options{}
 	if len(opts) > 0 {
 		o = opts[0]
 	}
-	if o.DefsDir == "" {
-		o.DefsDir = "" // use the renderer's pre-loaded registry
+	if o.Registry == nil {
+		o.Registry = r.registry
 	}
 	if o.Ignored == nil {
 		o.Ignored = r.ignored

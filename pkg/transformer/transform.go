@@ -67,6 +67,11 @@ type Options struct {
 	// Isolate creates a fresh QJS context per HTML file, clearing all
 	// global state between files. Slower but safer for untrusted components.
 	Isolate bool
+
+	// Registry is an optional pre-populated bundle registry. When set,
+	// TransformDir uses it instead of creating a new one. Additional
+	// discovery modes (DefsDir, SourcesDir, etc.) still layer onto it.
+	Registry *jsengine.Registry
 }
 
 // RenderError records a custom element that failed to render during SSR.
@@ -100,7 +105,10 @@ type Result struct {
 //  2. Render (parallel when Concurrency > 1): transform files using a
 //     pool of QJS engines, one engine per worker goroutine.
 func TransformDir(dir string, opts Options) (*Result, error) {
-	registry := jsengine.NewRegistry()
+	registry := opts.Registry
+	if registry == nil {
+		registry = jsengine.NewRegistry()
+	}
 
 	// Mode 0: Pre-compiled single artifact
 	if opts.CompiledFile != "" {
@@ -135,7 +143,7 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 
 	// Auto-discover is on by default if no other mode specified
 	autoDiscover := opts.AutoDiscover
-	if !autoDiscover && opts.DefsDir == "" && opts.CompiledFile == "" && opts.SourcesDir == "" && opts.ImportMapFile == "" {
+	if !autoDiscover && opts.DefsDir == "" && opts.CompiledFile == "" && opts.SourcesDir == "" && opts.ImportMapFile == "" && opts.Registry == nil {
 		autoDiscover = true
 	}
 
