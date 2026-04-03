@@ -602,7 +602,6 @@ func SaveBundle(bundle string, path string) error {
 	return fileutil.WriteFileAtomic(path, []byte(bundle), 0644)
 }
 
-
 // findNodeModules walks up from the given path to find node_modules.
 func findNodeModules(fromPath string) string {
 	dir := filepath.Dir(fromPath)
