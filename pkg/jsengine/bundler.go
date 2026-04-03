@@ -590,15 +590,6 @@ func SaveBundle(bundle string, path string) error {
 	return fileutil.WriteFileAtomic(path, []byte(bundle), 0644)
 }
 
-// patternToRegex converts a glob-like pattern to a regex string for esbuild.
-func patternToRegex(pattern string) string {
-	// Replace * with .* for regex matching
-	result := strings.ReplaceAll(pattern, "*", ".*")
-	// Replace / with escaped /
-	result = strings.ReplaceAll(result, "/", "\\/")
-	// Add start anchor
-	return "^" + result + "$"
-}
 
 // findNodeModules walks up from the given path to find node_modules.
 func findNodeModules(fromPath string) string {
