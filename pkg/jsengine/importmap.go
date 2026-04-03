@@ -20,6 +20,10 @@ type ImportMap struct {
 
 	// BaseDir is the directory relative to which map values are resolved.
 	BaseDir string `json:"-"`
+
+	// prefixes caches the slash-suffixed import keys sorted by length
+	// descending, so Resolve doesn't rebuild and re-sort on every call.
+	prefixes []string `json:"-"`
 }
 
 // ParseImportMap parses an import map from a JSON string.
@@ -33,7 +37,22 @@ func ParseImportMap(jsonStr string, baseDir string) (*ImportMap, error) {
 		im.Imports = make(map[string]string)
 	}
 	im.BaseDir = baseDir
+	im.buildPrefixes()
 	return &im, nil
+}
+
+// buildPrefixes extracts slash-suffixed keys from Imports and sorts them
+// by length descending so longer (more-specific) prefixes match first.
+func (im *ImportMap) buildPrefixes() {
+	im.prefixes = im.prefixes[:0]
+	for key := range im.Imports {
+		if strings.HasSuffix(key, "/") {
+			im.prefixes = append(im.prefixes, key)
+		}
+	}
+	sort.Slice(im.prefixes, func(i, j int) bool {
+		return len(im.prefixes[i]) > len(im.prefixes[j])
+	})
 }
 
 // LoadImportMapFile reads and parses an import map from a JSON file.
@@ -67,19 +86,8 @@ func (im *ImportMap) Resolve(specifier string) string {
 		return im.resolveToAbsPath(target)
 	}
 
-	// 2. Try prefix match (keys ending with "/")
-	// Sort by length descending so longer/more-specific prefixes match first
-	prefixes := make([]string, 0)
-	for key := range im.Imports {
-		if strings.HasSuffix(key, "/") {
-			prefixes = append(prefixes, key)
-		}
-	}
-	sort.Slice(prefixes, func(i, j int) bool {
-		return len(prefixes[i]) > len(prefixes[j])
-	})
-
-	for _, prefix := range prefixes {
+	// 2. Try prefix match (pre-sorted by length descending at parse time)
+	for _, prefix := range im.prefixes {
 		if strings.HasPrefix(specifier, prefix) {
 			suffix := specifier[len(prefix):]
 			target := im.Imports[prefix]
