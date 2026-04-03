@@ -23,7 +23,10 @@ import (
 	"github.com/sspriggs/golit/pkg/transformer"
 )
 
-const version = "0.0.1"
+// version is overridden at build time via ldflags -X main.version=...
+// The Makefile reads the canonical version from package.json (managed by changesets).
+// "dev" is the fallback for uninjected builds, e.g. `go run ./cmd/golit`.
+var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
