@@ -167,6 +167,7 @@ Options:
 - `--out <dir>` -- Output to a separate directory (default: in-place)
 - `--verbose` -- Print progress to stderr
 - `--dry-run` -- Process without writing
+- `-j [N]` / `--concurrency [N]` -- Process files in parallel. `-j` alone uses all available CPUs; `-j 4` uses 4 workers. Default is sequential.
 
 When no discovery flags are provided, auto-discovery from HTML is used.
 

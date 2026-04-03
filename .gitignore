@@ -5,3 +5,6 @@ dist/
 examples/public/
 examples/node_modules/
 examples/bundles
+
+
+.claude/settings.local.json
