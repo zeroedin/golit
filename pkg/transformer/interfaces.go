@@ -1,6 +1,6 @@
 package transformer
 
-import "github.com/sspriggs/golit/pkg/jsengine"
+import "github.com/zeroedin/golit/pkg/jsengine"
 
 // ElementRenderer is the interface the transformer uses to load and render
 // custom elements. *jsengine.Engine satisfies this interface. Defining it

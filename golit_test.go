@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sspriggs/golit"
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 func setupRendererBundles(t *testing.T) string {

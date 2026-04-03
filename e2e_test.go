@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
-	"github.com/sspriggs/golit/pkg/transformer"
+	"github.com/zeroedin/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
 func setupBundles(t *testing.T) string {

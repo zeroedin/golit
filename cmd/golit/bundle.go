@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 func runBundle(args []string) error {

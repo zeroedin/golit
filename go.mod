@@ -1,4 +1,4 @@
-module github.com/sspriggs/golit
+module github.com/zeroedin/golit
 
 go 1.25.1
 

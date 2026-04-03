@@ -11,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sspriggs/golit/pkg/fileutil"
-	"github.com/sspriggs/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/fileutil"
+	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
 // Options configures the transformer.

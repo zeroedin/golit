@@ -61,7 +61,7 @@ flowchart LR
 A standard `net/http` middleware that wraps any Go HTTP handler. It intercepts the response, SSR's custom elements, and streams the result:
 
 ```go
-import "github.com/sspriggs/golit/pkg/middleware"
+import "github.com/zeroedin/golit/pkg/middleware"
 
 // Create SSR middleware with pre-loaded bundles
 ssr, err := middleware.New(middleware.Options{

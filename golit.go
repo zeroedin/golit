@@ -14,8 +14,8 @@
 package golit
 
 import (
-	"github.com/sspriggs/golit/pkg/jsengine"
-	"github.com/sspriggs/golit/pkg/transformer"
+	"github.com/zeroedin/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
 // RendererOptions configures a Renderer instance.

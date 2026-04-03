@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
-	"github.com/sspriggs/golit/pkg/fileutil"
+	"github.com/zeroedin/golit/pkg/fileutil"
 )
 
 //go:embed domshim.js

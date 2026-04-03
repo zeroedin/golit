@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/sspriggs/golit/pkg/transformer"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
 // ConcurrencyValue is a YAML type that accepts:
