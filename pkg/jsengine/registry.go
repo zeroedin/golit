@@ -122,6 +122,9 @@ func (r *Registry) registerBundles(bundles []string) error {
 	r.mu.Unlock()
 
 	if len(fallbackBundles) > 0 {
+		// discoverTagNames returns map[index]tagName where each key is a
+		// valid index into the input slice. On partial error it returns
+		// results collected so far, so indices are always in bounds.
 		discovered, err := discoverTagNames(fallbackBundles)
 		if err != nil {
 			return err
