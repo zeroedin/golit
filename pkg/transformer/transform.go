@@ -169,12 +169,16 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	}
 
 	// ── Pass 1: Discovery (sequential) ──────────────────────────────
+	// Read files once and cache their contents so the render pass
+	// doesn't need to re-read them from disk.
+	fileCache := make(map[string][]byte, len(htmlFiles))
 	if autoDiscover || cliImportMap != nil {
 		for _, filePath := range htmlFiles {
 			data, err := os.ReadFile(filePath)
 			if err != nil {
 				continue
 			}
+			fileCache[filePath] = data
 			htmlDir := filepath.Dir(filePath)
 			discoverFromHTML(string(data), htmlDir, dir, registry, cliImportMap, opts.Verbose)
 		}
@@ -202,9 +206,9 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	var result *Result
 	var checkEngine *jsengine.Engine
 	if workers == 1 {
-		result, checkEngine, err = transformSequential(htmlFiles, dir, registry, opts, preloadBundles)
+		result, checkEngine, err = transformSequential(htmlFiles, dir, registry, opts, preloadBundles, fileCache)
 	} else {
-		result, checkEngine, err = transformParallel(htmlFiles, dir, registry, opts, preloadBundles, workers)
+		result, checkEngine, err = transformParallel(htmlFiles, dir, registry, opts, preloadBundles, workers, fileCache)
 	}
 	if err != nil {
 		return nil, err
@@ -264,7 +268,7 @@ func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Eng
 	return engine, nil
 }
 
-func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string) (*Result, *jsengine.Engine, error) {
+func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, fileCache map[string][]byte) (*Result, *jsengine.Engine, error) {
 	engine, err := initEngine(preloadBundles, opts.Preload)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating JS engine: %w", err)
@@ -289,7 +293,7 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 				_ = engine.LoadBundle(pb)
 			}
 		}
-		changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts)
+		changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts, fileCache[filePath])
 		processed++
 		renderErrors = append(renderErrors, reErrs...)
 
@@ -315,7 +319,7 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 	}, engine, nil
 }
 
-func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int) (*Result, *jsengine.Engine, error) {
+func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int, fileCache map[string][]byte) (*Result, *jsengine.Engine, error) {
 	pool, err := jsengine.NewEnginePool(workers)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating engine pool: %w", err)
@@ -351,7 +355,7 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 
 			for i := range work {
 				filePath := htmlFiles[i]
-				changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts)
+				changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts, fileCache[filePath])
 				results[i] = fileResult{
 					filePath:     filePath,
 					changed:      changed,
@@ -410,10 +414,14 @@ func logFileStatus(filePath, dir, outDir string, changed bool) {
 	fmt.Fprintf(os.Stderr, "  %s -> %s [%s]\n", filePath, outPath, status)
 }
 
-func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine ElementRenderer, opts Options) (bool, []RenderError, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return false, nil, fmt.Errorf("reading file: %w", err)
+func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine ElementRenderer, opts Options, cached []byte) (bool, []RenderError, error) {
+	data := cached
+	if data == nil {
+		var err error
+		data, err = os.ReadFile(filePath)
+		if err != nil {
+			return false, nil, fmt.Errorf("reading file: %w", err)
+		}
 	}
 
 	input := string(data)
