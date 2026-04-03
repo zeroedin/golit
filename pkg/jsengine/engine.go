@@ -63,10 +63,9 @@ func (e *Engine) Close() {
 	e.runtime.Close()
 }
 
-// Reset creates a fresh QJS context within the same runtime, clearing
-// all global state. Previously loaded bundles must be re-loaded.
-// This is cheaper than Close()+NewEngine() because it reuses the
-// compiled WASM module.
+// Reset tears down the current QJS runtime and creates a new one,
+// clearing all global state. Previously loaded bundles must be
+// re-loaded afterward.
 func (e *Engine) Reset() error {
 	e.runtime.Close()
 	rt, err := qjs.New()
