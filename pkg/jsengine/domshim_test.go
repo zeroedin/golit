@@ -16,7 +16,7 @@ func TestDOMShim_CustomElements(t *testing.T) {
 	ctx := rt.Context()
 
 	// Load DOM shim
-	_, err = ctx.Eval("domshim.js", qjs.Code(DOMShimJS))
+	_, err = ctx.Eval("domshim.js", qjs.Code(domShimJS))
 	if err != nil {
 		t.Fatalf("loading DOM shim: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestDOMShim_ShadowRoot(t *testing.T) {
 	defer rt.Close()
 
 	ctx := rt.Context()
-	_, err = ctx.Eval("domshim.js", qjs.Code(DOMShimJS))
+	_, err = ctx.Eval("domshim.js", qjs.Code(domShimJS))
 	if err != nil {
 		t.Fatal(err)
 	}

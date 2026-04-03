@@ -16,7 +16,7 @@ import (
 )
 
 //go:embed domshim.js
-var DOMShimJS string
+var domShimJS string
 
 //go:embed templatecollector.js
 var templateCollectorJS string
@@ -39,7 +39,7 @@ func ensureShimDir() (string, string, string, error) {
 			return
 		}
 		shimPath = filepath.Join(shimDir, "domshim.js")
-		if shimErr = os.WriteFile(shimPath, []byte(DOMShimJS), 0644); shimErr != nil {
+		if shimErr = os.WriteFile(shimPath, []byte(domShimJS), 0644); shimErr != nil {
 			return
 		}
 		collectorPath = filepath.Join(shimDir, "templatecollector.js")
