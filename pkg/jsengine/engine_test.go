@@ -140,6 +140,56 @@ func TestShimDynamicImports(t *testing.T) {
 			input: `import("prism-esm"); import('other-mod');`,
 			want:  `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import("prism-esm")*/; Promise.resolve(globalThis.__preloadedModules["other-mod"] || {})/*golit-shimmed:import('other-mod')*/;`,
 		},
+		{
+			name:  "prefix of preloaded module is not matched",
+			input: `import("prism-esm-extra")`,
+			want:  `import("prism-esm-extra")`,
+		},
+		{
+			name:  "prefix with single quotes not matched",
+			input: `import('other-module')`,
+			want:  `import('other-module')`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := e.shimDynamicImports(tc.input)
+			if got != tc.want {
+				t.Errorf("got:\n  %s\nwant:\n  %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShimDynamicImports_PrefixBoundary(t *testing.T) {
+	e := &Engine{preloadModules: []string{"lit"}}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "exact match is shimmed",
+			input: `import("lit")`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["lit"] || {})/*golit-shimmed:import("lit")*/`,
+		},
+		{
+			name:  "subpath is shimmed",
+			input: `import("lit/decorators.js")`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["lit"] || {})/*golit-shimmed:import("lit/decorators.js")*/`,
+		},
+		{
+			name:  "different module with same prefix is NOT shimmed",
+			input: `import("lit-html")`,
+			want:  `import("lit-html")`,
+		},
+		{
+			name:  "hyphenated suffix not shimmed single quotes",
+			input: `import('lit-element')`,
+			want:  `import('lit-element')`,
+		},
 	}
 
 	for _, tc := range cases {

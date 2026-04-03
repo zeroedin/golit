@@ -155,6 +155,13 @@ func (e *Engine) shimDynamicImports(code string) string {
 				code[matchStart:matchStart+len(p.prefix)] != p.prefix {
 				continue
 			}
+			// Boundary check: the char after the module name must be
+			// the closing quote (exact match) or '/' (subpath import).
+			// Without this, preloading "lit" would also match "lit-html".
+			nextChar := code[matchStart+len(p.prefix)]
+			if nextChar != p.close[0] && nextChar != '/' {
+				continue
+			}
 			end := strings.Index(code[matchStart+len(p.prefix):], p.close)
 			if end < 0 {
 				continue
