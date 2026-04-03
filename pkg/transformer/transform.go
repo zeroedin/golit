@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 
+	"github.com/sspriggs/golit/pkg/fileutil"
 	"github.com/sspriggs/golit/pkg/jsengine"
 )
 
@@ -53,8 +55,9 @@ type Options struct {
 	// DryRun reads and transforms files but does not write them back.
 	DryRun bool
 
-	// Concurrency is the number of files to process in parallel.
-	// 0 means use a sensible default.
+	// Concurrency is the number of parallel workers for file processing.
+	// 0 or 1 means sequential (default). Set to runtime.NumCPU() or
+	// a specific value for parallel processing of large sites.
 	Concurrency int
 
 	// OutDir is an optional output directory. When set, transformed files
@@ -90,6 +93,12 @@ type Result struct {
 }
 
 // TransformDir processes all HTML files in a directory tree.
+//
+// Processing happens in two passes:
+//  1. Discovery (sequential): read every HTML file and run component
+//     auto-discovery so the registry is fully populated.
+//  2. Render (parallel when Concurrency > 1): transform files using a
+//     pool of QJS engines, one engine per worker goroutine.
 func TransformDir(dir string, opts Options) (*Result, error) {
 	registry := jsengine.NewRegistry()
 
@@ -136,22 +145,8 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 		return nil, fmt.Errorf("collecting HTML files: %w", err)
 	}
 
-	// Create a single QJS engine for the entire transform run.
-	// Bundles are loaded lazily via LoadBundleForTag and persist across files,
-	// avoiding repeated engine creation and bundle re-evaluation per file.
-	// QJS is not goroutine-safe, so files are processed sequentially.
-	engine, err := jsengine.NewEngine()
-	if err != nil {
-		return nil, fmt.Errorf("creating JS engine: %w", err)
-	}
-	defer engine.Close()
-
-	// Pre-load extra modules into QJS before component rendering.
-	// These are resolved, bundled, and loaded so that dynamic import()
-	// calls in component bundles can access them.
-	// Tell the engine which modules are preloaded so it can shim import() calls.
-	engine.SetPreloadModules(opts.Preload)
-
+	// Resolve and bundle preload modules (shared across all engines).
+	var preloadBundles []string
 	for _, mod := range opts.Preload {
 		modPath, err := jsengine.ResolveModulePath(mod, dir)
 		if err != nil {
@@ -163,66 +158,79 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 			fmt.Fprintf(os.Stderr, "golit: warning: could not bundle preload %s: %v\n", mod, err)
 			continue
 		}
-		if err := engine.LoadBundle(bundle); err != nil {
-			fmt.Fprintf(os.Stderr, "golit: warning: could not load preload %s: %v\n", mod, err)
-			continue
-		}
+		preloadBundles = append(preloadBundles, bundle)
 		if opts.Verbose {
 			fmt.Fprintf(os.Stderr, "golit: preloaded %s from %s\n", mod, modPath)
 		}
 	}
 
-	var (
-		processed    int
-		modified     int
-		errorsList   []error
-		renderErrors []RenderError
-	)
-
-	for _, filePath := range htmlFiles {
-		if opts.Isolate {
-			if err := engine.Reset(); err != nil {
-				errorsList = append(errorsList, fmt.Errorf("resetting engine for %s: %w", filePath, err))
-				processed++
-				continue
+	// ── Pass 1: Discovery (sequential) ──────────────────────────────
+	// Read every HTML file and run component auto-discovery so the
+	// registry is fully populated before rendering begins.
+	if autoDiscover || cliImportMap != nil {
+		for _, filePath := range htmlFiles {
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				continue // will be reported in the render pass
 			}
-		}
-		changed, err := transformFile(filePath, dir, registry, engine, opts, cliImportMap, autoDiscover, &renderErrors)
-		processed++
-
-		if err != nil {
-			errorsList = append(errorsList, fmt.Errorf("%s: %w", filePath, err))
-			continue
-		}
-
-		if changed {
-			modified++
-		}
-
-		if opts.Verbose {
-			status := "unchanged"
-			if changed {
-				status = "modified"
-			}
-			outPath := filePath
-			if opts.OutDir != "" {
-				rel, _ := filepath.Rel(dir, filePath)
-				outPath = filepath.Join(opts.OutDir, rel)
-			}
-			fmt.Fprintf(os.Stderr, "  %s -> %s [%s]\n", filePath, outPath, status)
+			htmlDir := filepath.Dir(filePath)
+			discoverFromHTML(string(data), htmlDir, dir, registry, cliImportMap, opts.Verbose)
 		}
 	}
 
-	// Filter the unregistered list: remove sub-components of known elements
-	// and elements defined in the QJS engine. Sub-components are identified by:
-	// 1. Prefix match: rh-accordion-header starts with rh-accordion-
-	// 2. Source file match: rh-footer-block.js exists in rh-footer/ directory
-	// 3. QJS registration: defined by a parent bundle's side effects
+	// ── Pass 2: Render ──────────────────────────────────────────────
+	// Determine concurrency. Isolate mode forces sequential processing
+	// because each file needs a fresh engine.
+	// Concurrency: 1 = sequential (default), N>1 = N parallel workers.
+	// Isolate mode forces sequential since each file needs a fresh engine.
+	workers := opts.Concurrency
+	if workers < 1 {
+		workers = 1
+	}
+	if opts.Isolate {
+		workers = 1
+	}
+	// No point having more workers than files.
+	if workers > len(htmlFiles) {
+		workers = len(htmlFiles)
+	}
+	if workers < 1 {
+		workers = 1
+	}
+
+	if opts.Verbose && workers > 1 {
+		fmt.Fprintf(os.Stderr, "golit: using %d parallel workers\n", workers)
+	}
+
+	var result *Result
+	if workers == 1 {
+		result, err = transformSequential(htmlFiles, dir, registry, opts, preloadBundles)
+	} else {
+		result, err = transformParallel(htmlFiles, dir, registry, opts, preloadBundles, workers)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter the unregistered list: remove sub-components of known elements.
+	// We need a single engine to check QJS registration for side-effect-defined
+	// elements (e.g. sub-components registered by a parent bundle).
+	checkEngine, engineErr := jsengine.NewEngine()
+	if engineErr == nil {
+		defer checkEngine.Close()
+		checkEngine.SetPreloadModules(opts.Preload)
+		for _, pb := range preloadBundles {
+			_ = checkEngine.LoadBundle(pb)
+		}
+		for _, tag := range registry.TagNames() {
+			checkEngine.LoadBundleForTag(tag, registry)
+		}
+	}
 	knownTags := registry.TagNames()
 	knownPaths := registry.ProcessedPaths()
 	var trulyUnregistered []string
 	for _, tag := range registry.Unregistered() {
-		if engine.IsRegistered(tag) {
+		if checkEngine != nil && checkEngine.IsRegistered(tag) {
 			continue
 		}
 
@@ -239,7 +247,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 		}
 
 		// Check if tag's .js file exists in any known element's directory
-		// e.g. rh-footer-block.js in the same dir as rh-footer.js
 		for _, knownPath := range knownPaths {
 			siblingPath := filepath.Join(filepath.Dir(knownPath), tag+".js")
 			if _, err := os.Stat(siblingPath); err == nil {
@@ -253,29 +260,200 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 
 		trulyUnregistered = append(trulyUnregistered, tag)
 	}
+	result.Unregistered = trulyUnregistered
+
+	return result, nil
+}
+
+// initEngine creates an engine and loads preload bundles into it.
+func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Engine, error) {
+	engine, err := jsengine.NewEngine()
+	if err != nil {
+		return nil, err
+	}
+	engine.SetPreloadModules(preloadModules)
+	for _, pb := range preloadBundles {
+		if err := engine.LoadBundle(pb); err != nil {
+			engine.Close()
+			return nil, err
+		}
+	}
+	return engine, nil
+}
+
+// transformSequential processes files one at a time with a single engine.
+// Used when Concurrency==1 or Isolate mode is on.
+func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string) (*Result, error) {
+	engine, err := initEngine(preloadBundles, opts.Preload)
+	if err != nil {
+		return nil, fmt.Errorf("creating JS engine: %w", err)
+	}
+	defer engine.Close()
+
+	var (
+		processed    int
+		modified     int
+		errorsList   []error
+		renderErrors []RenderError
+	)
+
+	for _, filePath := range htmlFiles {
+		if opts.Isolate {
+			if err := engine.Reset(); err != nil {
+				errorsList = append(errorsList, fmt.Errorf("resetting engine for %s: %w", filePath, err))
+				processed++
+				continue
+			}
+			// Re-load preloads after reset.
+			engine.SetPreloadModules(opts.Preload)
+			for _, pb := range preloadBundles {
+				_ = engine.LoadBundle(pb)
+			}
+		}
+		changed, err := renderFile(filePath, dir, registry, engine, opts)
+		processed++
+
+		if err != nil {
+			errorsList = append(errorsList, fmt.Errorf("%s: %w", filePath, err))
+			continue
+		}
+
+		if changed {
+			modified++
+		}
+
+		if opts.Verbose {
+			logFileStatus(filePath, dir, opts.OutDir, changed)
+		}
+	}
 
 	return &Result{
 		FilesProcessed: processed,
 		FilesModified:  modified,
 		Errors:         errorsList,
 		RenderErrors:   renderErrors,
-		Unregistered:   trulyUnregistered,
 	}, nil
 }
 
-// transformFile reads, transforms, and writes a single HTML file.
-func transformFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options, cliImportMap *jsengine.ImportMap, autoDiscover bool, renderErrors *[]RenderError) (bool, error) {
+// transformParallel processes files using a pool of QJS engines.
+func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int) (*Result, error) {
+	pool, err := jsengine.NewEnginePool(workers)
+	if err != nil {
+		return nil, fmt.Errorf("creating engine pool: %w", err)
+	}
+	defer pool.Close()
+
+	// Load preload bundles into every engine in the pool.
+	// We need to do this before PreloadAll since preload bundles
+	// may register modules that component bundles depend on.
+	drained := make([]*jsengine.Engine, workers)
+	for i := 0; i < workers; i++ {
+		e := pool.Get()
+		e.SetPreloadModules(opts.Preload)
+		for _, pb := range preloadBundles {
+			_ = e.LoadBundle(pb)
+		}
+		drained[i] = e
+	}
+	for _, e := range drained {
+		pool.Put(e)
+	}
+
+	// Pre-load all discovered component bundles into every engine.
+	if err := pool.PreloadAll(registry, opts.Preload); err != nil {
+		return nil, fmt.Errorf("preloading pool: %w", err)
+	}
+
+	type fileResult struct {
+		filePath     string
+		changed      bool
+		err          error
+		renderErrors []RenderError
+	}
+
+	results := make([]fileResult, len(htmlFiles))
+	var wg sync.WaitGroup
+
+	work := make(chan int, len(htmlFiles))
+	for i := range htmlFiles {
+		work <- i
+	}
+	close(work)
+
+	for w := 0; w < workers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			engine := pool.Get()
+			defer pool.Put(engine)
+
+			for i := range work {
+				filePath := htmlFiles[i]
+				changed, err := renderFile(filePath, dir, registry, engine, opts)
+				results[i] = fileResult{
+					filePath: filePath,
+					changed:  changed,
+					err:      err,
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	var (
+		processed    int
+		modified     int
+		errorsList   []error
+		renderErrors []RenderError
+	)
+
+	for _, r := range results {
+		processed++
+		if r.err != nil {
+			errorsList = append(errorsList, fmt.Errorf("%s: %w", r.filePath, r.err))
+			continue
+		}
+		if r.changed {
+			modified++
+		}
+		renderErrors = append(renderErrors, r.renderErrors...)
+		if opts.Verbose {
+			logFileStatus(r.filePath, dir, opts.OutDir, r.changed)
+		}
+	}
+
+	return &Result{
+		FilesProcessed: processed,
+		FilesModified:  modified,
+		Errors:         errorsList,
+		RenderErrors:   renderErrors,
+	}, nil
+}
+
+// logFileStatus prints a verbose status line for a processed file.
+func logFileStatus(filePath, dir, outDir string, changed bool) {
+	status := "unchanged"
+	if changed {
+		status = "modified"
+	}
+	outPath := filePath
+	if outDir != "" {
+		rel, _ := filepath.Rel(dir, filePath)
+		outPath = filepath.Join(outDir, rel)
+	}
+	fmt.Fprintf(os.Stderr, "  %s -> %s [%s]\n", filePath, outPath, status)
+}
+
+// renderFile reads, transforms, and writes a single HTML file.
+// Discovery must have already been run (pass 1); this function only renders.
+func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options) (bool, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return false, fmt.Errorf("reading file: %w", err)
 	}
 
 	input := string(data)
-
-	htmlDir := filepath.Dir(filePath)
-	if autoDiscover || cliImportMap != nil {
-		discoverFromHTML(input, htmlDir, srcDir, registry, cliImportMap, opts.Verbose)
-	}
 
 	ctx := &transformContext{
 		engine:   engine,
@@ -287,7 +465,6 @@ func transformFile(filePath string, srcDir string, registry *jsengine.Registry, 
 	if err != nil {
 		return false, fmt.Errorf("rendering: %w", err)
 	}
-	*renderErrors = append(*renderErrors, ctx.renderErrors...)
 
 	if output == input && opts.OutDir == "" {
 		return false, nil
@@ -305,7 +482,7 @@ func transformFile(filePath string, srcDir string, registry *jsengine.Registry, 
 				return false, fmt.Errorf("creating output directory: %w", err)
 			}
 		}
-		if err := os.WriteFile(destPath, []byte(output), 0644); err != nil {
+		if err := fileutil.WriteFileAtomic(destPath, []byte(output), 0644); err != nil {
 			return false, fmt.Errorf("writing file: %w", err)
 		}
 	}

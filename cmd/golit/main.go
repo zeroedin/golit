@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -93,6 +95,8 @@ Options:
   --verbose          Print progress to stderr
   --dry-run          Process files without writing changes
   --strict           Exit with error if any components fail to render
+  --concurrency, -j  Parallel workers for transform (default: sequential)
+                     -j alone uses all CPUs, -j N uses N workers
   --component-js     Inline JS/TS component source for render command (repeatable)
 
 Component Discovery (transform command):
@@ -412,6 +416,22 @@ func runTransform(args []string) error {
 		case "--dry-run":
 			cliOpts.DryRun = true
 			i++
+		case "--concurrency", "-j":
+			// -j alone means auto (NumCPU), -j N means N workers
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				n, err := strconv.Atoi(args[i+1])
+				if err != nil {
+					return fmt.Errorf("--concurrency value must be a positive integer")
+				}
+				if n < 1 {
+					return fmt.Errorf("--concurrency value must be a positive integer")
+				}
+				cliOpts.Concurrency = n
+				i += 2
+			} else {
+				cliOpts.Concurrency = runtime.NumCPU()
+				i++
+			}
 		case "--isolate":
 			cliOpts.Isolate = true
 			i++

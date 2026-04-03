@@ -3,11 +3,45 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/sspriggs/golit/pkg/transformer"
 )
+
+// ConcurrencyValue is a YAML type that accepts:
+//   - false (or omitted): sequential processing (1 worker)
+//   - true: use all available CPUs
+//   - <number>: use exactly that many workers
+type ConcurrencyValue struct {
+	Workers int // resolved worker count: 0 means not set
+}
+
+func (c *ConcurrencyValue) UnmarshalYAML(value *yaml.Node) error {
+	// Try bool first
+	var b bool
+	if err := value.Decode(&b); err == nil {
+		if b {
+			c.Workers = runtime.NumCPU()
+		} else {
+			c.Workers = 1
+		}
+		return nil
+	}
+
+	// Try int
+	var n int
+	if err := value.Decode(&n); err == nil {
+		if n < 1 {
+			return fmt.Errorf("concurrency must be a positive integer, got %d", n)
+		}
+		c.Workers = n
+		return nil
+	}
+
+	return fmt.Errorf("concurrency must be true, false, or a positive integer")
+}
 
 // Config represents a golit.yaml configuration file.
 type Config struct {
@@ -51,6 +85,12 @@ type TransformConfig struct {
 
 	// Isolate creates a fresh QJS context per HTML file.
 	Isolate bool `yaml:"isolate"`
+
+	// Concurrency controls parallel file processing:
+	//   false (or omitted): sequential (default)
+	//   true: use all available CPUs
+	//   <number>: use exactly that many workers
+	Concurrency ConcurrencyValue `yaml:"concurrency"`
 }
 
 // BundleConfig holds bundle-specific settings.
@@ -118,6 +158,9 @@ func (c *Config) ToTransformOptions(cliOpts transformer.Options) transformer.Opt
 	if c.Transform.Isolate {
 		opts.Isolate = true
 	}
+	if c.Transform.Concurrency.Workers != 0 {
+		opts.Concurrency = c.Transform.Concurrency.Workers
+	}
 	if len(c.Transform.Ignore) > 0 {
 		opts.Ignored = make(map[string]bool)
 		for _, tag := range c.Transform.Ignore {
@@ -152,6 +195,9 @@ func (c *Config) ToTransformOptions(cliOpts transformer.Options) transformer.Opt
 	}
 	if cliOpts.Isolate {
 		opts.Isolate = true
+	}
+	if cliOpts.Concurrency != 0 {
+		opts.Concurrency = cliOpts.Concurrency
 	}
 	if cliOpts.Ignored != nil {
 		if opts.Ignored == nil {
