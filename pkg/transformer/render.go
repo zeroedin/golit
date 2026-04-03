@@ -2,6 +2,7 @@ package transformer
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -196,7 +197,7 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 				ctx.renderErrors = append(ctx.renderErrors, RenderError{
 					TagName: p.node.Data,
 					File:    ctx.file,
-					Err:     fmt.Errorf("%s", r.Error),
+					Err:     errors.New(r.Error),
 				})
 				continue
 			}
