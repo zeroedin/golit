@@ -110,6 +110,14 @@ func (e *Engine) LoadBundle(bundle string) error {
 	return nil
 }
 
+// shimPattern holds a pre-computed (module, quote-style) pair so the
+// scan loop in shimDynamicImports avoids per-iteration allocations.
+type shimPattern struct {
+	prefix string // e.g. `import("prism-esm`
+	close  string // e.g. `")`
+	mod    string
+}
+
 // shimDynamicImports replaces dynamic import("module") expressions with
 // Promise.resolve(globalThis.__preloadedModules["module"]) for preloaded modules.
 // Handles both quote styles and subpath imports (e.g. import("mod/sub.js")).
@@ -118,13 +126,21 @@ func (e *Engine) shimDynamicImports(code string) string {
 		return code
 	}
 
-	const prefix = "import("
+	patterns := make([]shimPattern, 0, len(e.preloadModules)*2)
+	for _, mod := range e.preloadModules {
+		patterns = append(patterns,
+			shimPattern{prefix: `import("` + mod, close: `")`, mod: mod},
+			shimPattern{prefix: `import('` + mod, close: `')`, mod: mod},
+		)
+	}
+
+	const importOpen = "import("
 	var b strings.Builder
 	b.Grow(len(code) + len(code)/10)
 
 	pos := 0
 	for {
-		idx := strings.Index(code[pos:], prefix)
+		idx := strings.Index(code[pos:], importOpen)
 		if idx < 0 {
 			b.WriteString(code[pos:])
 			break
@@ -134,36 +150,29 @@ func (e *Engine) shimDynamicImports(code string) string {
 		matchStart := pos + idx
 		matched := false
 
-		for _, mod := range e.preloadModules {
-			for _, q := range []byte{'"', '\''} {
-				modPrefix := prefix + string(q) + mod
-				if matchStart+len(modPrefix) > len(code) ||
-					code[matchStart:matchStart+len(modPrefix)] != modPrefix {
-					continue
-				}
-				closeStr := string(q) + ")"
-				end := strings.Index(code[matchStart+len(modPrefix):], closeStr)
-				if end < 0 {
-					continue
-				}
-				full := code[matchStart : matchStart+len(modPrefix)+end+2]
-				b.WriteString(`Promise.resolve(globalThis.__preloadedModules["`)
-				b.WriteString(mod)
-				b.WriteString(`"] || {})/*golit-shimmed:`)
-				b.WriteString(full)
-				b.WriteString(`*/`)
-				pos = matchStart + len(full)
-				matched = true
-				break
+		for _, p := range patterns {
+			if matchStart+len(p.prefix) > len(code) ||
+				code[matchStart:matchStart+len(p.prefix)] != p.prefix {
+				continue
 			}
-			if matched {
-				break
+			end := strings.Index(code[matchStart+len(p.prefix):], p.close)
+			if end < 0 {
+				continue
 			}
+			full := code[matchStart : matchStart+len(p.prefix)+end+len(p.close)]
+			b.WriteString(`Promise.resolve(globalThis.__preloadedModules["`)
+			b.WriteString(p.mod)
+			b.WriteString(`"] || {})/*golit-shimmed:`)
+			b.WriteString(full)
+			b.WriteString(`*/`)
+			pos = matchStart + len(full)
+			matched = true
+			break
 		}
 
 		if !matched {
-			b.WriteString(prefix)
-			pos = matchStart + len(prefix)
+			b.WriteString(importOpen)
+			pos = matchStart + len(importOpen)
 		}
 	}
 

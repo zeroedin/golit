@@ -97,6 +97,69 @@ func TestEngine_StyleExtraction(t *testing.T) {
 	t.Logf("CSS: %s", result.CSS[:min(100, len(result.CSS))])
 }
 
+func TestShimDynamicImports(t *testing.T) {
+	e := &Engine{preloadModules: []string{"prism-esm", "other-mod"}}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "no imports",
+			input: `var x = 1;`,
+			want:  `var x = 1;`,
+		},
+		{
+			name:  "double-quoted import",
+			input: `import("prism-esm")`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import("prism-esm")*/`,
+		},
+		{
+			name:  "single-quoted import",
+			input: `import('prism-esm')`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import('prism-esm')*/`,
+		},
+		{
+			name:  "subpath import",
+			input: `import("prism-esm/components/prism-css.js")`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import("prism-esm/components/prism-css.js")*/`,
+		},
+		{
+			name:  "non-preloaded module unchanged",
+			input: `import("unknown-mod")`,
+			want:  `import("unknown-mod")`,
+		},
+		{
+			name:  "second module matched",
+			input: `import("other-mod")`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["other-mod"] || {})/*golit-shimmed:import("other-mod")*/`,
+		},
+		{
+			name:  "multiple imports in one string",
+			input: `import("prism-esm"); import('other-mod');`,
+			want:  `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import("prism-esm")*/; Promise.resolve(globalThis.__preloadedModules["other-mod"] || {})/*golit-shimmed:import('other-mod')*/;`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := e.shimDynamicImports(tc.input)
+			if got != tc.want {
+				t.Errorf("got:\n  %s\nwant:\n  %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShimDynamicImports_NoModules(t *testing.T) {
+	e := &Engine{}
+	input := `import("something")`
+	if got := e.shimDynamicImports(input); got != input {
+		t.Errorf("expected no change when preloadModules is empty, got %q", got)
+	}
+}
+
 func TestEngine_UnregisteredElement(t *testing.T) {
 	engine, err := NewEngine()
 	if err != nil {
