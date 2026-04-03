@@ -75,20 +75,18 @@ func runTransform(args []string) error {
 			cliOpts.DryRun = true
 			i++
 		case "--concurrency", "-j":
-			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
-				n, err := strconv.Atoi(args[i+1])
-				if err != nil {
-					return fmt.Errorf("--concurrency value must be a positive integer")
+			if i+1 < len(args) {
+				if n, err := strconv.Atoi(args[i+1]); err == nil {
+					if n < 1 {
+						return fmt.Errorf("--concurrency value must be a positive integer")
+					}
+					cliOpts.Concurrency = n
+					i += 2
+					continue
 				}
-				if n < 1 {
-					return fmt.Errorf("--concurrency value must be a positive integer")
-				}
-				cliOpts.Concurrency = n
-				i += 2
-			} else {
-				cliOpts.Concurrency = runtime.NumCPU()
-				i++
 			}
+			cliOpts.Concurrency = runtime.NumCPU()
+			i++
 		case "--isolate":
 			cliOpts.Isolate = true
 			i++
