@@ -310,8 +310,9 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 				_ = engine.LoadBundle(pb)
 			}
 		}
-		changed, err := renderFile(filePath, dir, registry, engine, opts)
+		changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts)
 		processed++
+		renderErrors = append(renderErrors, reErrs...)
 
 		if err != nil {
 			errorsList = append(errorsList, fmt.Errorf("%s: %w", filePath, err))
@@ -389,11 +390,12 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 
 			for i := range work {
 				filePath := htmlFiles[i]
-				changed, err := renderFile(filePath, dir, registry, engine, opts)
+				changed, reErrs, err := renderFile(filePath, dir, registry, engine, opts)
 				results[i] = fileResult{
-					filePath: filePath,
-					changed:  changed,
-					err:      err,
+					filePath:     filePath,
+					changed:      changed,
+					err:          err,
+					renderErrors: reErrs,
 				}
 			}
 		}()
@@ -447,10 +449,10 @@ func logFileStatus(filePath, dir, outDir string, changed bool) {
 
 // renderFile reads, transforms, and writes a single HTML file.
 // Discovery must have already been run (pass 1); this function only renders.
-func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options) (bool, error) {
+func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options) (bool, []RenderError, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return false, fmt.Errorf("reading file: %w", err)
+		return false, nil, fmt.Errorf("reading file: %w", err)
 	}
 
 	input := string(data)
@@ -463,11 +465,11 @@ func renderFile(filePath string, srcDir string, registry *jsengine.Registry, eng
 	}
 	output, err := renderHTMLWithContext(input, ctx)
 	if err != nil {
-		return false, fmt.Errorf("rendering: %w", err)
+		return false, ctx.renderErrors, fmt.Errorf("rendering: %w", err)
 	}
 
 	if output == input && opts.OutDir == "" {
-		return false, nil
+		return false, ctx.renderErrors, nil
 	}
 
 	if !opts.DryRun {
@@ -475,15 +477,15 @@ func renderFile(filePath string, srcDir string, registry *jsengine.Registry, eng
 		if opts.OutDir != "" {
 			rel, err := filepath.Rel(srcDir, filePath)
 			if err != nil {
-				return false, fmt.Errorf("computing relative path: %w", err)
+				return false, ctx.renderErrors, fmt.Errorf("computing relative path: %w", err)
 			}
 			destPath = filepath.Join(opts.OutDir, rel)
 			if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
-				return false, fmt.Errorf("creating output directory: %w", err)
+				return false, ctx.renderErrors, fmt.Errorf("creating output directory: %w", err)
 			}
 		}
 		if err := fileutil.WriteFileAtomic(destPath, []byte(output), 0644); err != nil {
-			return false, fmt.Errorf("writing file: %w", err)
+			return false, ctx.renderErrors, fmt.Errorf("writing file: %w", err)
 		}
 	}
 
@@ -491,7 +493,7 @@ func renderFile(filePath string, srcDir string, registry *jsengine.Registry, eng
 	if opts.OutDir != "" {
 		changed = true
 	}
-	return changed, nil
+	return changed, ctx.renderErrors, nil
 }
 
 // importRe matches ES module import statements to extract bare-module specifiers.
