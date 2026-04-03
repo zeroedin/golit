@@ -23,8 +23,10 @@ var importRe = regexp.MustCompile(`import\s+(?:[^'"]*\s+from\s+)?['"]([^'"]+)['"
 func discoverFromHTML(htmlContent string, htmlDir string, siteRoot string, registry *jsengine.Registry, cliImportMap *jsengine.ImportMap, verbose bool) {
 	if !strings.Contains(htmlContent, `type="importmap"`) &&
 		!strings.Contains(htmlContent, `type='importmap'`) &&
+		!strings.Contains(htmlContent, `type=importmap`) &&
 		!strings.Contains(htmlContent, `type="module"`) &&
-		!strings.Contains(htmlContent, `type='module'`) {
+		!strings.Contains(htmlContent, `type='module'`) &&
+		!strings.Contains(htmlContent, `type=module`) {
 		return
 	}
 

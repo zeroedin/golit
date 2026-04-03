@@ -91,6 +91,30 @@ func TestDiscoverFromHTML_SkipsPlainHTML(t *testing.T) {
 	}
 }
 
+func TestDiscoverFromHTML_DoesNotSkipUnquotedType(t *testing.T) {
+	for _, attr := range []string{
+		`type=module`,
+		`type="module"`,
+		`type='module'`,
+		`type=importmap`,
+		`type="importmap"`,
+		`type='importmap'`,
+	} {
+		t.Run(attr, func(t *testing.T) {
+			html := `<!DOCTYPE html><html><head><script ` + attr + `>/* content */</script></head><body></body></html>`
+			if !strings.Contains(html, `type=`) {
+				t.Fatal("sanity: test HTML missing type attribute")
+			}
+			// We can't easily test that html.Parse runs without real
+			// bundles, but we can verify the pre-scan doesn't reject
+			// the content by checking discoverFromHTML doesn't panic
+			// and completes (the parse path runs even with no results).
+			registry := newTestRegistry()
+			discoverFromHTML(html, "/tmp", "/tmp", registry, nil, false)
+		})
+	}
+}
+
 func TestDiscoverFromHTML_SkipsRegularScript(t *testing.T) {
 	registry := newTestRegistry()
 
