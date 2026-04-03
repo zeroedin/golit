@@ -61,6 +61,7 @@ func renderHTMLWithContext(input string, ctx *transformContext) (string, error) 
 	}
 
 	var buf bytes.Buffer
+	buf.Grow(len(input) + len(input)/2)
 	if err := html.Render(&buf, doc); err != nil {
 		return "", fmt.Errorf("rendering HTML: %w", err)
 	}
@@ -112,6 +113,7 @@ func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *js
 	}
 
 	var buf bytes.Buffer
+	buf.Grow(len(input) + len(input)/2)
 	for child := wrapper.FirstChild; child != nil; child = child.NextSibling {
 		if err := html.Render(&buf, child); err != nil {
 			return "", fmt.Errorf("rendering: %w", err)
@@ -183,14 +185,16 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 			return fmt.Errorf("batch render at depth %d: %w", depth, err)
 		}
 
-		resultMap := make(map[int]jsengine.BatchResult, len(results))
+		resultSlice := make([]jsengine.BatchResult, len(pending))
 		for _, r := range results {
-			resultMap[r.ID] = r
+			if r.ID >= 0 && r.ID < len(resultSlice) {
+				resultSlice[r.ID] = r
+			}
 		}
 
 		for i, p := range pending {
-			r, ok := resultMap[i]
-			if !ok {
+			r := resultSlice[i]
+			if r.TagName == "" {
 				continue
 			}
 			if r.Error != "" {

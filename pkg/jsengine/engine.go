@@ -286,6 +286,23 @@ type BatchResult struct {
 // RenderBatch renders multiple custom elements in a single QJS Eval call,
 // reducing Go-to-JS boundary crossings. Each element is still rendered
 // individually within QJS; the batching is at the transport layer only.
+const batchRenderSuffix = `;const results=[];` +
+	`for(const req of requests){` +
+	`const Ctor=customElements.get(req.tagName);` +
+	`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered'});continue;}` +
+	`try{` +
+	`const el=new Ctor();` +
+	`for(const [key,value] of Object.entries(req.attrs||{})){` +
+	`el.setAttribute(key,value);` +
+	`const propName=attributeToProperty(Ctor,key);` +
+	`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
+	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render());}` +
+	`let css='';if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
+	`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
+	`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
+	`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
+	`return JSON.stringify(results);})();`
+
 func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 	if len(requests) == 0 {
 		return nil, nil
@@ -296,43 +313,13 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		return nil, fmt.Errorf("marshaling batch requests: %w", err)
 	}
 
-	script := fmt.Sprintf(`
-		(function() {
-			const requests = %s;
-			const results = [];
-			for (const req of requests) {
-				const Ctor = customElements.get(req.tagName);
-				if (!Ctor) {
-					results.push({ id: req.id, error: 'Element <' + req.tagName + '> not registered' });
-					continue;
-				}
-				try {
-					const el = new Ctor();
-					for (const [key, value] of Object.entries(req.attrs || {})) {
-						el.setAttribute(key, value);
-						const propName = attributeToProperty(Ctor, key);
-						if (propName) {
-							const propConfig = getPropertyConfig(Ctor, propName);
-							el[propName] = coerceValue(value, propConfig);
-						}
-					}
-					let html = '';
-					if (typeof el.render === 'function') {
-						html = __collectTemplateResult(el.render());
-					}
-					let css = '';
-					if (Ctor.styles) { css = extractStyles(Ctor.styles); }
-					else if (Ctor.elementStyles) { css = extractStyles(Ctor.elementStyles); }
-					results.push({ id: req.id, html: html, css: css, tagName: req.tagName });
-				} catch(e) {
-					results.push({ id: req.id, error: e.message, tagName: req.tagName });
-				}
-			}
-			return JSON.stringify(results);
-		})();
-	`, string(reqJSON))
+	var script strings.Builder
+	script.Grow(len(reqJSON) + len(batchRenderSuffix) + 32)
+	script.WriteString("(function(){const requests=")
+	script.Write(reqJSON)
+	script.WriteString(batchRenderSuffix)
 
-	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script))
+	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script.String()))
 	if err != nil {
 		return nil, fmt.Errorf("batch render eval: %w", err)
 	}
