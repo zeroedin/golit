@@ -262,12 +262,13 @@ func isFullDocument(input string) bool {
 }
 
 func extractBodyContent(rendered string) string {
-	bodyStart := strings.Index(rendered, "<body>")
+	lower := strings.ToLower(rendered)
+	bodyStart := strings.Index(lower, "<body>")
 	if bodyStart == -1 {
 		return rendered
 	}
 	bodyStart += len("<body>")
-	bodyEnd := strings.LastIndex(rendered, "</body>")
+	bodyEnd := strings.LastIndex(lower, "</body>")
 	if bodyEnd == -1 {
 		return rendered
 	}
