@@ -139,56 +139,68 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 func stripESMExports(code string) (string, bool) {
 	hasTopLevelAwait := false
 	inExportBlock := false
-	lines := strings.Split(code, "\n")
-	for i, line := range lines {
+	var b strings.Builder
+	b.Grow(len(code))
+
+	lineNum := 0
+	rest := code
+	for len(rest) > 0 {
+		nlIdx := strings.IndexByte(rest, '\n')
+		var line string
+		if nlIdx >= 0 {
+			line = rest[:nlIdx]
+			rest = rest[nlIdx+1:]
+		} else {
+			line = rest
+			rest = ""
+		}
+
+		if lineNum > 0 {
+			b.WriteByte('\n')
+		}
+		lineNum++
+
 		trimmed := strings.TrimSpace(line)
 
-		// Track multi-line "export { ... };" blocks
 		if inExportBlock {
-			lines[i] = ""
 			if strings.Contains(trimmed, "};") || trimmed == "}" {
 				inExportBlock = false
 			}
 			continue
 		}
 
-		// Single-line "export { Foo, Bar };"
 		if (strings.HasPrefix(trimmed, "export {") || strings.HasPrefix(trimmed, "export{")) &&
 			strings.Contains(trimmed, "}") {
-			lines[i] = ""
 			continue
 		}
-		// Multi-line "export {\n  Foo,\n  Bar\n};"
 		if strings.HasPrefix(trimmed, "export {") || strings.HasPrefix(trimmed, "export{") {
-			lines[i] = ""
 			inExportBlock = true
 			continue
 		}
-		// "export default" -> just the value
 		if strings.HasPrefix(trimmed, "export default ") {
-			lines[i] = strings.Replace(line, "export default ", "", 1)
+			b.WriteString(strings.Replace(line, "export default ", "", 1))
 			continue
 		}
-		// "export var/let/const/function/class" -> strip "export "
 		if strings.HasPrefix(trimmed, "export var ") ||
 			strings.HasPrefix(trimmed, "export let ") ||
 			strings.HasPrefix(trimmed, "export const ") ||
 			strings.HasPrefix(trimmed, "export function ") ||
 			strings.HasPrefix(trimmed, "export class ") ||
 			strings.HasPrefix(trimmed, "export async ") {
-			lines[i] = strings.Replace(line, "export ", "", 1)
+			b.WriteString(strings.Replace(line, "export ", "", 1))
 			continue
 		}
-		// Detect top-level await: line starts with "await " at shallow indentation
-		// (esbuild emits top-level code at indent 0; method bodies are deeper)
 		if !hasTopLevelAwait && strings.HasPrefix(trimmed, "await ") {
 			indent := len(line) - len(strings.TrimLeft(line, " \t"))
 			if indent <= 2 {
 				hasTopLevelAwait = true
 			}
 		}
+
+		b.WriteString(line)
 	}
-	return strings.Join(lines, "\n"), hasTopLevelAwait
+
+	return b.String(), hasTopLevelAwait
 }
 
 // BundleComponents bundles multiple component source files in a single
