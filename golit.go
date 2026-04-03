@@ -80,15 +80,17 @@ func NewRenderer(opts RendererOptions) (*Renderer, error) {
 }
 
 // RenderHTML transforms a full HTML document, expanding custom elements
-// into Declarative Shadow DOM.
+// into Declarative Shadow DOM. Reuses the Renderer's engine to avoid
+// per-call engine creation overhead.
 func (r *Renderer) RenderHTML(input string) (string, error) {
-	return transformer.RenderHTML(input, r.registry, r.ignored)
+	return transformer.RenderHTMLWithEngine(input, r.engine, r.registry, r.ignored)
 }
 
 // RenderFragment transforms an HTML fragment, expanding custom elements
-// into Declarative Shadow DOM.
+// into Declarative Shadow DOM. Reuses the Renderer's engine to avoid
+// per-call engine creation overhead.
 func (r *Renderer) RenderFragment(input string) (string, error) {
-	return transformer.RenderFragment(input, r.registry, r.ignored)
+	return transformer.RenderFragmentWithEngine(input, r.engine, r.registry, r.ignored)
 }
 
 // TransformDir processes all HTML files in a directory tree.

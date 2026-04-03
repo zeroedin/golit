@@ -667,7 +667,7 @@ func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored ma
 		return "", fmt.Errorf("creating JS engine: %w", err)
 	}
 	defer engine.Close()
-	return renderHTMLWithEngine(input, engine, registry, ignored)
+	return RenderHTMLWithEngine(input, engine, registry, ignored)
 }
 
 // transformContext carries shared state through the recursive transform walk.
@@ -679,8 +679,10 @@ type transformContext struct {
 	renderErrors []RenderError
 }
 
-// renderHTMLWithEngine transforms HTML using a provided engine (no create/destroy overhead).
-func renderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+// RenderHTMLWithEngine transforms HTML using a caller-provided engine,
+// avoiding engine creation overhead. Use this when you have a long-lived
+// engine (e.g. in a Renderer).
+func RenderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
 	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
 	output, err := renderHTMLWithContext(input, ctx)
 	return output, err
@@ -718,6 +720,17 @@ func RenderFragment(input string, registry *jsengine.Registry, ignored ...map[st
 }
 
 func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+	engine, err := jsengine.NewEngine()
+	if err != nil {
+		return "", fmt.Errorf("creating JS engine: %w", err)
+	}
+	defer engine.Close()
+	return RenderFragmentWithEngine(input, engine, registry, ignored)
+}
+
+// RenderFragmentWithEngine renders an HTML fragment using a caller-provided
+// engine, avoiding engine creation overhead.
+func RenderFragmentWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
 	nodes, err := html.ParseFragment(strings.NewReader(input), &html.Node{
 		Type: html.ElementNode, Data: "body", DataAtom: atom.Body,
 	})
@@ -725,15 +738,8 @@ func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignore
 		return "", fmt.Errorf("parsing fragment: %w", err)
 	}
 
-	engine, err := jsengine.NewEngine()
-	if err != nil {
-		return "", fmt.Errorf("creating JS engine: %w", err)
-	}
-	defer engine.Close()
-
 	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
 
-	// Wrap nodes in a temporary parent for batch rendering
 	wrapper := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
 	for _, node := range nodes {
 		wrapper.AppendChild(node)
