@@ -108,38 +108,62 @@ func (e *Engine) LoadBundle(bundle string) error {
 
 // shimDynamicImports replaces dynamic import("module") expressions with
 // Promise.resolve(globalThis.__preloadedModules["module"]) for preloaded modules.
+// Handles both quote styles and subpath imports (e.g. import("mod/sub.js")).
 func (e *Engine) shimDynamicImports(code string) string {
-	for _, mod := range e.preloadModules {
-		// Replace: import("prism-esm") -> Promise.resolve(globalThis.__preloadedModules["prism-esm"])
-		// Also handle: import('prism-esm') with single quotes
-		// And subpath imports: import("prism-esm/components/prism-css.js")
-		dq := `import("` + mod
-		sq := `import('` + mod
-		replacement := `Promise.resolve(globalThis.__preloadedModules["` + mod + `"] || {})/*golit-shimmed:`
-		// Replace double-quoted imports
-		for strings.Contains(code, dq) {
-			// Find the full import expression: import("module...") 
-			idx := strings.Index(code, dq)
-			// Find closing quote + paren
-			end := strings.Index(code[idx+len(dq):], `")`)
-			if end < 0 {
-				break
-			}
-			full := code[idx : idx+len(dq)+end+2]
-			code = strings.Replace(code, full, replacement+full+`*/`, 1)
+	if len(e.preloadModules) == 0 || !strings.Contains(code, "import(") {
+		return code
+	}
+
+	const prefix = "import("
+	var b strings.Builder
+	b.Grow(len(code) + len(code)/10)
+
+	pos := 0
+	for {
+		idx := strings.Index(code[pos:], prefix)
+		if idx < 0 {
+			b.WriteString(code[pos:])
+			break
 		}
-		// Replace single-quoted imports
-		for strings.Contains(code, sq) {
-			idx := strings.Index(code, sq)
-			end := strings.Index(code[idx+len(sq):], `')`)
-			if end < 0 {
+
+		b.WriteString(code[pos : pos+idx])
+		matchStart := pos + idx
+		matched := false
+
+		for _, mod := range e.preloadModules {
+			for _, q := range []byte{'"', '\''} {
+				modPrefix := prefix + string(q) + mod
+				if matchStart+len(modPrefix) > len(code) ||
+					code[matchStart:matchStart+len(modPrefix)] != modPrefix {
+					continue
+				}
+				closeStr := string(q) + ")"
+				end := strings.Index(code[matchStart+len(modPrefix):], closeStr)
+				if end < 0 {
+					continue
+				}
+				full := code[matchStart : matchStart+len(modPrefix)+end+2]
+				b.WriteString(`Promise.resolve(globalThis.__preloadedModules["`)
+				b.WriteString(mod)
+				b.WriteString(`"] || {})/*golit-shimmed:`)
+				b.WriteString(full)
+				b.WriteString(`*/`)
+				pos = matchStart + len(full)
+				matched = true
 				break
 			}
-			full := code[idx : idx+len(sq)+end+2]
-			code = strings.Replace(code, full, replacement+full+`*/`, 1)
+			if matched {
+				break
+			}
+		}
+
+		if !matched {
+			b.WriteString(prefix)
+			pos = matchStart + len(prefix)
 		}
 	}
-	return code
+
+	return b.String()
 }
 
 // LoadBundleForTag loads a bundle from the registry for a specific tag name.
