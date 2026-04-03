@@ -884,7 +884,7 @@ func collectUnexpanded(node *html.Node, ctx *transformContext) []pendingElement 
 			}
 		}
 		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walk(child, depth)
+			walk(child, depth+1)
 		}
 	}
 	walk(node, 0)
