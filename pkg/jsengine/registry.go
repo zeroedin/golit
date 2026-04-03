@@ -324,6 +324,14 @@ func DiscoverTagName(bundle string) (string, error) {
 // call using a regex, avoiding QJS entirely. Returns ("", false) when the
 // regex cannot find a match.
 func discoverTagNameFast(bundle string) (string, bool) {
+	idx := strings.LastIndex(bundle, "customElements")
+	if idx < 0 {
+		return "", false
+	}
+	if match := defineRe.FindStringSubmatch(bundle[idx:]); match != nil {
+		return match[1], true
+	}
+	// Last occurrence wasn't a .define() call; fall back to full scan.
 	matches := defineRe.FindAllStringSubmatch(bundle, -1)
 	if len(matches) == 0 {
 		return "", false

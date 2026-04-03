@@ -82,6 +82,19 @@ func TestDiscoverTagNameFast_ExplicitDefine(t *testing.T) {
 	}
 }
 
+func TestDiscoverTagNameFast_ReverseScanFallback(t *testing.T) {
+	input := `customElements.define('dep-a', DepA);
+	// Later, a non-define reference to customElements
+	var reg = customElements;`
+	got, ok := discoverTagNameFast(input)
+	if !ok {
+		t.Fatal("expected tag name from earlier define call")
+	}
+	if got != "dep-a" {
+		t.Errorf("tag = %q, want %q", got, "dep-a")
+	}
+}
+
 func TestDiscoverTagNameFast_RealBundle(t *testing.T) {
 	bundle := bundleMyGreeting(t)
 
