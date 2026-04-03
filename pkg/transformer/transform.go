@@ -211,28 +211,17 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	}
 
 	var result *Result
+	var checkEngine *jsengine.Engine
 	if workers == 1 {
-		result, err = transformSequential(htmlFiles, dir, registry, opts, preloadBundles)
+		result, checkEngine, err = transformSequential(htmlFiles, dir, registry, opts, preloadBundles)
 	} else {
-		result, err = transformParallel(htmlFiles, dir, registry, opts, preloadBundles, workers)
+		result, checkEngine, err = transformParallel(htmlFiles, dir, registry, opts, preloadBundles, workers)
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	// Filter the unregistered list: remove sub-components of known elements.
-	// We need a single engine to check QJS registration for side-effect-defined
-	// elements (e.g. sub-components registered by a parent bundle).
-	checkEngine, engineErr := jsengine.NewEngine()
-	if engineErr == nil {
+	if checkEngine != nil {
 		defer checkEngine.Close()
-		checkEngine.SetPreloadModules(opts.Preload)
-		for _, pb := range preloadBundles {
-			_ = checkEngine.LoadBundle(pb)
-		}
-		for _, tag := range registry.TagNames() {
-			checkEngine.LoadBundleForTag(tag, registry)
-		}
 	}
 	knownTags := registry.TagNames()
 	knownPaths := registry.ProcessedPaths()
@@ -291,12 +280,12 @@ func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Eng
 
 // transformSequential processes files one at a time with a single engine.
 // Used when Concurrency==1 or Isolate mode is on.
-func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string) (*Result, error) {
+// The returned engine is fully loaded and the caller must close it.
+func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string) (*Result, *jsengine.Engine, error) {
 	engine, err := initEngine(preloadBundles, opts.Preload)
 	if err != nil {
-		return nil, fmt.Errorf("creating JS engine: %w", err)
+		return nil, nil, fmt.Errorf("creating JS engine: %w", err)
 	}
-	defer engine.Close()
 
 	var (
 		processed    int
@@ -341,21 +330,22 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 		FilesModified:  modified,
 		Errors:         errorsList,
 		RenderErrors:   renderErrors,
-	}, nil
+	}, engine, nil
 }
 
 // transformParallel processes files using a pool of QJS engines.
-func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int) (*Result, error) {
+// The returned engine is borrowed from the pool; the caller must close it.
+func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int) (*Result, *jsengine.Engine, error) {
 	pool, err := jsengine.NewEnginePool(workers)
 	if err != nil {
-		return nil, fmt.Errorf("creating engine pool: %w", err)
+		return nil, nil, fmt.Errorf("creating engine pool: %w", err)
 	}
 	defer pool.Close()
 
 	// Pre-load preload bundles and component bundles into every engine
 	// in a single drain pass.
 	if err := pool.PreloadAll(registry, opts.Preload, preloadBundles...); err != nil {
-		return nil, fmt.Errorf("preloading pool: %w", err)
+		return nil, nil, fmt.Errorf("preloading pool: %w", err)
 	}
 
 	type fileResult struct {
@@ -418,12 +408,16 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 		}
 	}
 
+	// Extract one fully-loaded engine for the caller before pool.Close()
+	// drains the rest.
+	checkEngine := pool.Get()
+
 	return &Result{
 		FilesProcessed: processed,
 		FilesModified:  modified,
 		Errors:         errorsList,
 		RenderErrors:   renderErrors,
-	}, nil
+	}, checkEngine, nil
 }
 
 // logFileStatus prints a verbose status line for a processed file.
