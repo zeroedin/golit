@@ -271,7 +271,6 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 
 func runCompile(args []string) error {
 	var defsDir, outPath string
-	var minify bool
 
 	i := 0
 	for i < len(args) {
@@ -288,9 +287,6 @@ func runCompile(args []string) error {
 			}
 			outPath = args[i+1]
 			i += 2
-		case "--minify":
-			minify = true
-			i++
 		default:
 			if strings.HasPrefix(args[i], "--") {
 				return fmt.Errorf("unknown option: %s", args[i])
@@ -343,7 +339,6 @@ func runCompile(args []string) error {
 	compiled.WriteString("};\n")
 
 	output := compiled.String()
-	_ = minify // reserved for future esbuild minification pass
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return fmt.Errorf("creating output directory: %w", err)
