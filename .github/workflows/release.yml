@@ -41,7 +41,7 @@ jobs:
         if: steps.changesets.outputs.hasChangesets == 'false'
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: 'go.mod'
 
       - name: Extract version
         if: steps.changesets.outputs.hasChangesets == 'false'

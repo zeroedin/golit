@@ -53,7 +53,9 @@ func TestEngine_RenderMyGreeting_DifferentNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer engine.Close()
-	engine.LoadBundle(bundle)
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, name := range []string{"Alice", "Go", "Hugo"} {
 		t.Run(name, func(t *testing.T) {
@@ -78,7 +80,9 @@ func TestEngine_StyleExtraction(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer engine.Close()
-	engine.LoadBundle(bundle)
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := engine.RenderElement("my-greeting", map[string]string{
 		"name": "Test",
@@ -104,11 +108,4 @@ func TestEngine_UnregisteredElement(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for unregistered element")
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

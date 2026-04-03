@@ -1,7 +1,11 @@
 bundles/
 node_modules/
 dist/
+*.golit.bundle.js
 
 examples/public/
 examples/node_modules/
 examples/bundles
+
+
+.claude/settings.local.json

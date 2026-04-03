@@ -1,14 +1,10 @@
 package jsengine
 
 import (
-	_ "embed"
 	"testing"
 
 	"github.com/fastschema/qjs"
 )
-
-//go:embed domshim.js
-var domShimJS string
 
 func TestDOMShim_CustomElements(t *testing.T) {
 	rt, err := qjs.New()

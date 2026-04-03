@@ -167,6 +167,7 @@ Options:
 - `--out <dir>` -- Output to a separate directory (default: in-place)
 - `--verbose` -- Print progress to stderr
 - `--dry-run` -- Process without writing
+- `-j [N]` / `--concurrency [N]` -- Process files in parallel. `-j` alone uses all available CPUs; `-j 4` uses 4 workers. Default is sequential.
 
 When no discovery flags are provided, auto-discovery from HTML is used.
 
@@ -197,6 +198,45 @@ golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 ### `golit version`
 
 Print the version.
+
+## Library Usage
+
+golit can be used as a Go library. Import `github.com/sspriggs/golit` and use the `Renderer` type:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/sspriggs/golit"
+)
+
+func main() {
+	renderer, err := golit.NewRenderer(golit.RendererOptions{
+		DefsDir: "bundles/",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer renderer.Close()
+
+	output, err := renderer.RenderFragment(`<my-el name="World"></my-el>`)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(output)
+}
+```
+
+The `Renderer` exposes three rendering methods:
+
+- `RenderFragment(html)` -- Render an HTML fragment
+- `RenderHTML(html)` -- Render a full HTML document
+- `TransformDir(dir)` -- Process all HTML files in a directory
+
+For lower-level control, use the `pkg/jsengine` and `pkg/transformer` packages directly.
 
 ## How It Works
 
