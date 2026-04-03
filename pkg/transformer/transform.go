@@ -4,17 +4,12 @@
 package transformer
 
 import (
-	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
-
-	"golang.org/x/net/html"
-	"golang.org/x/net/html/atom"
 
 	"github.com/sspriggs/golit/pkg/fileutil"
 	"github.com/sspriggs/golit/pkg/jsengine"
@@ -174,13 +169,11 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	}
 
 	// ── Pass 1: Discovery (sequential) ──────────────────────────────
-	// Read every HTML file and run component auto-discovery so the
-	// registry is fully populated before rendering begins.
 	if autoDiscover || cliImportMap != nil {
 		for _, filePath := range htmlFiles {
 			data, err := os.ReadFile(filePath)
 			if err != nil {
-				continue // will be reported in the render pass
+				continue
 			}
 			htmlDir := filepath.Dir(filePath)
 			discoverFromHTML(string(data), htmlDir, dir, registry, cliImportMap, opts.Verbose)
@@ -188,10 +181,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	}
 
 	// ── Pass 2: Render ──────────────────────────────────────────────
-	// Determine concurrency. Isolate mode forces sequential processing
-	// because each file needs a fresh engine.
-	// Concurrency: 1 = sequential (default), N>1 = N parallel workers.
-	// Isolate mode forces sequential since each file needs a fresh engine.
 	workers := opts.Concurrency
 	if workers < 1 {
 		workers = 1
@@ -199,7 +188,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	if opts.Isolate {
 		workers = 1
 	}
-	// No point having more workers than files.
 	if workers > len(htmlFiles) {
 		workers = len(htmlFiles)
 	}
@@ -232,7 +220,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 			continue
 		}
 
-		// Check prefix match against known tags
 		isSub := false
 		for _, known := range knownTags {
 			if strings.HasPrefix(tag, known+"-") {
@@ -244,7 +231,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 			continue
 		}
 
-		// Check if tag's .js file exists in any known element's directory
 		for _, knownPath := range knownPaths {
 			siblingPath := filepath.Join(filepath.Dir(knownPath), tag+".js")
 			if _, err := os.Stat(siblingPath); err == nil {
@@ -263,7 +249,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	return result, nil
 }
 
-// initEngine creates an engine and loads preload bundles into it.
 func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Engine, error) {
 	engine, err := jsengine.NewEngine()
 	if err != nil {
@@ -279,9 +264,6 @@ func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Eng
 	return engine, nil
 }
 
-// transformSequential processes files one at a time with a single engine.
-// Used when Concurrency==1 or Isolate mode is on.
-// The returned engine is fully loaded and the caller must close it.
 func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string) (*Result, *jsengine.Engine, error) {
 	engine, err := initEngine(preloadBundles, opts.Preload)
 	if err != nil {
@@ -302,7 +284,6 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 				processed++
 				continue
 			}
-			// Re-load preloads after reset.
 			engine.SetPreloadModules(opts.Preload)
 			for _, pb := range preloadBundles {
 				_ = engine.LoadBundle(pb)
@@ -334,8 +315,6 @@ func transformSequential(htmlFiles []string, dir string, registry *jsengine.Regi
 	}, engine, nil
 }
 
-// transformParallel processes files using a pool of QJS engines.
-// The returned engine is borrowed from the pool; the caller must close it.
 func transformParallel(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, workers int) (*Result, *jsengine.Engine, error) {
 	pool, err := jsengine.NewEnginePool(workers)
 	if err != nil {
@@ -343,8 +322,6 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 	}
 	defer pool.Close()
 
-	// Pre-load preload bundles and component bundles into every engine
-	// in a single drain pass.
 	if err := pool.PreloadAll(registry, opts.Preload, preloadBundles...); err != nil {
 		return nil, nil, fmt.Errorf("preloading pool: %w", err)
 	}
@@ -409,8 +386,6 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 		}
 	}
 
-	// Extract one fully-loaded engine for the caller before pool.Close()
-	// drains the rest.
 	checkEngine := pool.Get()
 
 	return &Result{
@@ -421,7 +396,6 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 	}, checkEngine, nil
 }
 
-// logFileStatus prints a verbose status line for a processed file.
 func logFileStatus(filePath, dir, outDir string, changed bool) {
 	status := "unchanged"
 	if changed {
@@ -435,8 +409,6 @@ func logFileStatus(filePath, dir, outDir string, changed bool) {
 	fmt.Fprintf(os.Stderr, "  %s -> %s [%s]\n", filePath, outPath, status)
 }
 
-// renderFile reads, transforms, and writes a single HTML file.
-// Discovery must have already been run (pass 1); this function only renders.
 func renderFile(filePath string, srcDir string, registry *jsengine.Registry, engine *jsengine.Engine, opts Options) (bool, []RenderError, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -482,424 +454,6 @@ func renderFile(filePath string, srcDir string, registry *jsengine.Registry, eng
 		changed = true
 	}
 	return changed, ctx.renderErrors, nil
-}
-
-// importRe matches ES module import statements to extract bare-module specifiers.
-// Handles: import 'x', import "x", import {...} from 'x', import x from 'x'
-var importRe = regexp.MustCompile(`import\s+(?:[^'"]*\s+from\s+)?['"]([^'"]+)['"]`)
-
-// discoverFromHTML extracts import maps and module import specifiers from
-// HTML content, resolves them, bundles the components, and registers them.
-// siteRoot is the top-level directory passed to TransformDir (e.g. "public/"),
-// used to resolve absolute paths like "/node_modules/..." in import maps.
-func discoverFromHTML(htmlContent string, htmlDir string, siteRoot string, registry *jsengine.Registry, cliImportMap *jsengine.ImportMap, verbose bool) {
-	// Parse the HTML to find script tags
-	doc, err := html.Parse(strings.NewReader(htmlContent))
-	if err != nil {
-		return
-	}
-
-	var htmlImportMap *jsengine.ImportMap
-	var moduleSpecifiers []string
-
-	// Walk the DOM to find script tags
-	var walkNode func(*html.Node)
-	walkNode = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "script" {
-			scriptType := getAttr(n, "type")
-
-			if scriptType == "importmap" {
-				// Extract the import map JSON from the script content.
-				// Use siteRoot as baseDir so that absolute paths like
-				// "/node_modules/..." resolve relative to the site root.
-				content := getTextContent(n)
-				if content != "" {
-					absSiteRoot, _ := filepath.Abs(siteRoot)
-					im, err := jsengine.ParseImportMap(content, absSiteRoot)
-					if err == nil {
-						htmlImportMap = im
-					}
-				}
-			} else if scriptType == "module" {
-				// Extract import specifiers from inline module scripts
-				content := getTextContent(n)
-				if content != "" {
-					matches := importRe.FindAllStringSubmatch(content, -1)
-					for _, match := range matches {
-						if len(match) >= 2 {
-							moduleSpecifiers = append(moduleSpecifiers, match[1])
-						}
-					}
-				}
-				// Also check src attribute for external module scripts
-				// (we can't read those, but the inline ones are most common for import maps)
-			}
-		}
-
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walkNode(child)
-		}
-	}
-	walkNode(doc)
-
-	// CLI import map takes precedence, fall back to HTML-embedded map
-	activeMap := cliImportMap
-	if activeMap == nil {
-		activeMap = htmlImportMap
-	}
-
-	if activeMap == nil || len(moduleSpecifiers) == 0 {
-		if verbose {
-			fmt.Fprintf(os.Stderr, "  golit: discovery: activeMap=%v specifiers=%v\n", activeMap != nil, moduleSpecifiers)
-		}
-		return
-	}
-
-	// Resolve specifiers through the import map and bundle
-	resolvedPaths := activeMap.ResolveAll(moduleSpecifiers)
-	if verbose {
-		fmt.Fprintf(os.Stderr, "  golit: discovery: %d specifiers -> %d resolved paths\n", len(moduleSpecifiers), len(resolvedPaths))
-		for _, p := range resolvedPaths {
-			fmt.Fprintf(os.Stderr, "    %s\n", p)
-		}
-	}
-	// Collect local paths for batch bundling; warn about CDN URLs
-	var localPaths []string
-	for _, path := range resolvedPaths {
-		if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-			fmt.Fprintf(os.Stderr, "  golit: skipping %s (CDN URL)\n", path)
-			fmt.Fprintf(os.Stderr, "         Use --importmap with local paths or --sources for SSR\n")
-			continue
-		}
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			continue
-		}
-		localPaths = append(localPaths, path)
-	}
-
-	if len(localPaths) == 0 {
-		return
-	}
-
-	// Skip bundling if all paths have already been processed.
-	// This avoids re-running esbuild + QJS discovery for every HTML file
-	// when they all share the same import map and module scripts.
-	allKnown := true
-	for _, p := range localPaths {
-		if !registry.HasPath(p) {
-			allKnown = false
-			break
-		}
-	}
-	if allKnown {
-		return
-	}
-
-	// Batch-bundle all discovered components in one esbuild call
-	bundles, err := jsengine.BundleComponents(localPaths)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "  golit: warning: batch bundle failed: %v\n", err)
-		return
-	}
-
-	for path, bundle := range bundles {
-		tagName, err := jsengine.DiscoverTagName(bundle)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  golit: warning: could not discover tag in %s: %v\n", path, err)
-			registry.MarkPath(path) // mark as processed even if no tag found
-			continue
-		}
-
-		if !registry.Has(tagName) {
-			registry.Register(tagName, bundle)
-			fmt.Fprintf(os.Stderr, "  golit: auto-discovered <%s> from %s\n", tagName, path)
-		}
-		registry.MarkPath(path)
-	}
-}
-
-// getAttr gets an attribute value from an HTML node.
-func getAttr(n *html.Node, key string) string {
-	for _, attr := range n.Attr {
-		if attr.Key == key {
-			return attr.Val
-		}
-	}
-	return ""
-}
-
-// getTextContent gets the text content of an HTML node.
-func getTextContent(n *html.Node) string {
-	var buf strings.Builder
-	for child := n.FirstChild; child != nil; child = child.NextSibling {
-		if child.Type == html.TextNode {
-			buf.WriteString(child.Data)
-		}
-	}
-	return buf.String()
-}
-
-// RenderHTML takes an HTML string, finds custom elements, and returns
-// the transformed HTML with Declarative Shadow DOM.
-func RenderHTML(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
-	var ign map[string]bool
-	if len(ignored) > 0 {
-		ign = ignored[0]
-	}
-	return renderHTMLWithIgnored(input, registry, ign)
-}
-
-func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
-	engine, err := jsengine.NewEngine()
-	if err != nil {
-		return "", fmt.Errorf("creating JS engine: %w", err)
-	}
-	defer engine.Close()
-	return RenderHTMLWithEngine(input, engine, registry, ignored)
-}
-
-// transformContext carries shared state through the recursive transform walk.
-type transformContext struct {
-	engine       *jsengine.Engine
-	registry     *jsengine.Registry
-	ignored      map[string]bool
-	file         string // current HTML file path (for error reporting)
-	renderErrors []RenderError
-}
-
-// RenderHTMLWithEngine transforms HTML using a caller-provided engine,
-// avoiding engine creation overhead. Use this when you have a long-lived
-// engine (e.g. in a Renderer).
-func RenderHTMLWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
-	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
-	output, err := renderHTMLWithContext(input, ctx)
-	return output, err
-}
-
-func renderHTMLWithContext(input string, ctx *transformContext) (string, error) {
-	doc, err := html.Parse(strings.NewReader(input))
-	if err != nil {
-		return "", fmt.Errorf("parsing HTML: %w", err)
-	}
-
-	if err := renderHTMLBatched(doc, ctx, 10); err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	if err := html.Render(&buf, doc); err != nil {
-		return "", fmt.Errorf("rendering HTML: %w", err)
-	}
-
-	result := buf.String()
-	if !isFullDocument(input) {
-		result = extractBodyContent(result)
-	}
-	return result, nil
-}
-
-// RenderFragment renders an HTML fragment.
-func RenderFragment(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
-	var ign map[string]bool
-	if len(ignored) > 0 {
-		ign = ignored[0]
-	}
-	return renderFragmentWithIgnored(input, registry, ign)
-}
-
-func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
-	engine, err := jsengine.NewEngine()
-	if err != nil {
-		return "", fmt.Errorf("creating JS engine: %w", err)
-	}
-	defer engine.Close()
-	return RenderFragmentWithEngine(input, engine, registry, ignored)
-}
-
-// RenderFragmentWithEngine renders an HTML fragment using a caller-provided
-// engine, avoiding engine creation overhead.
-func RenderFragmentWithEngine(input string, engine *jsengine.Engine, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
-	nodes, err := html.ParseFragment(strings.NewReader(input), &html.Node{
-		Type: html.ElementNode, Data: "body", DataAtom: atom.Body,
-	})
-	if err != nil {
-		return "", fmt.Errorf("parsing fragment: %w", err)
-	}
-
-	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
-
-	wrapper := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
-	for _, node := range nodes {
-		wrapper.AppendChild(node)
-	}
-
-	if err := renderHTMLBatched(wrapper, ctx, 10); err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	for child := wrapper.FirstChild; child != nil; child = child.NextSibling {
-		if err := html.Render(&buf, child); err != nil {
-			return "", fmt.Errorf("rendering: %w", err)
-		}
-	}
-	return buf.String(), nil
-}
-
-// pendingElement tracks a custom element waiting to be expanded in batch mode.
-type pendingElement struct {
-	node  *html.Node
-	depth int
-}
-
-// collectUnexpanded walks the HTML tree and returns all custom elements
-// that haven't been expanded yet (no <template shadowrootmode> child).
-func collectUnexpanded(node *html.Node, ctx *transformContext) []pendingElement {
-	var pending []pendingElement
-	var walk func(*html.Node, int)
-	walk = func(n *html.Node, depth int) {
-		if depth > 10 {
-			return
-		}
-		if n.Type == html.ElementNode && strings.Contains(n.Data, "-") {
-			if !ctx.ignored[n.Data] && !hasDeclarativeShadowRoot(n) {
-				loaded, loadErr := ctx.engine.LoadBundleForTag(n.Data, ctx.registry)
-				if loadErr != nil {
-					fmt.Fprintf(os.Stderr, "golit: warning: %v\n", loadErr)
-				}
-				if loaded || ctx.engine.IsRegistered(n.Data) {
-					pending = append(pending, pendingElement{node: n, depth: depth})
-					return // don't recurse into this node's children yet
-				}
-				ctx.registry.MarkUnregistered(n.Data)
-			}
-		}
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walk(child, depth+1)
-		}
-	}
-	walk(node, 0)
-	return pending
-}
-
-// renderHTMLBatched uses BFS-by-depth to render all custom elements,
-// batching all elements at each depth level into a single QJS Eval call.
-func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) error {
-	for depth := 0; depth < maxDepth; depth++ {
-		pending := collectUnexpanded(doc, ctx)
-		if len(pending) == 0 {
-			break
-		}
-
-		requests := make([]jsengine.BatchRequest, len(pending))
-		for i, p := range pending {
-			attrs := make(map[string]string)
-			for _, attr := range p.node.Attr {
-				attrs[attr.Key] = attr.Val
-			}
-			requests[i] = jsengine.BatchRequest{
-				ID:      i,
-				TagName: p.node.Data,
-				Attrs:   attrs,
-			}
-		}
-
-		results, err := ctx.engine.RenderBatch(requests)
-		if err != nil {
-			return fmt.Errorf("batch render at depth %d: %w", depth, err)
-		}
-
-		resultMap := make(map[int]jsengine.BatchResult, len(results))
-		for _, r := range results {
-			resultMap[r.ID] = r
-		}
-
-		for i, p := range pending {
-			r, ok := resultMap[i]
-			if !ok {
-				continue
-			}
-			if r.Error != "" {
-				ctx.renderErrors = append(ctx.renderErrors, RenderError{
-					TagName: p.node.Data,
-					File:    ctx.file,
-					Err:     fmt.Errorf("%s", r.Error),
-				})
-				continue
-			}
-
-			var shadowContent strings.Builder
-			if r.CSS != "" {
-				shadowContent.WriteString("<style>")
-				shadowContent.WriteString(strings.TrimSpace(r.CSS))
-				shadowContent.WriteString("</style>")
-			}
-			shadowContent.WriteString(r.HTML)
-
-			shadowNodes, err := html.ParseFragment(
-				strings.NewReader(shadowContent.String()),
-				&html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body},
-			)
-			if err != nil {
-				continue
-			}
-
-			templateNode := &html.Node{
-				Type: html.ElementNode, Data: "template", DataAtom: atom.Template,
-				Attr: []html.Attribute{
-					{Key: "shadowroot", Val: "open"},
-					{Key: "shadowrootmode", Val: "open"},
-				},
-			}
-
-			for _, sn := range shadowNodes {
-				templateNode.AppendChild(sn)
-			}
-
-			if depth > 0 {
-				p.node.Attr = append(p.node.Attr, html.Attribute{Key: "defer-hydration"})
-			}
-
-			if p.node.FirstChild != nil {
-				p.node.InsertBefore(templateNode, p.node.FirstChild)
-			} else {
-				p.node.AppendChild(templateNode)
-			}
-		}
-	}
-	return nil
-}
-
-// hasDeclarativeShadowRoot checks if an element already has DSD.
-func hasDeclarativeShadowRoot(node *html.Node) bool {
-	for child := node.FirstChild; child != nil; child = child.NextSibling {
-		if child.Type == html.ElementNode && child.Data == "template" {
-			for _, attr := range child.Attr {
-				if attr.Key == "shadowrootmode" || attr.Key == "shadowroot" {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func isFullDocument(input string) bool {
-	lower := strings.TrimSpace(strings.ToLower(input))
-	return strings.HasPrefix(lower, "<!doctype") || strings.HasPrefix(lower, "<html")
-}
-
-func extractBodyContent(rendered string) string {
-	bodyStart := strings.Index(rendered, "<body>")
-	if bodyStart == -1 {
-		return rendered
-	}
-	bodyStart += len("<body>")
-	bodyEnd := strings.LastIndex(rendered, "</body>")
-	if bodyEnd == -1 {
-		return rendered
-	}
-	return rendered[bodyStart:bodyEnd]
 }
 
 func collectHTMLFiles(dir string) ([]string, error) {
