@@ -38,6 +38,11 @@ type RendererOptions struct {
 
 // Renderer holds a JS engine and bundle registry, providing methods
 // to render Lit components into Declarative Shadow DOM.
+//
+// A Renderer is NOT safe for concurrent use. Its internal QJS engine is
+// single-threaded; calling RenderHTML, RenderFragment, or RegisterComponent
+// from multiple goroutines concurrently will race. To render concurrently,
+// create a separate Renderer per goroutine or protect calls with a mutex.
 type Renderer struct {
 	engine   *jsengine.Engine
 	registry *jsengine.Registry
