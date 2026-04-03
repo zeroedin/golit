@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -85,20 +86,20 @@ func benchmarkTransformDir(b *testing.B, fileCount, concurrency int) {
 }
 
 // 10 files
-func BenchmarkTransformDir_10files_seq(b *testing.B)  { benchmarkTransformDir(b, 10, 1) }
-func BenchmarkTransformDir_10files_par(b *testing.B)  { benchmarkTransformDir(b, 10, 0) }
+func BenchmarkTransformDir_10files_seq(b *testing.B) { benchmarkTransformDir(b, 10, 1) }
+func BenchmarkTransformDir_10files_par(b *testing.B) { benchmarkTransformDir(b, 10, runtime.NumCPU()) }
 
 // 50 files
-func BenchmarkTransformDir_50files_seq(b *testing.B)  { benchmarkTransformDir(b, 50, 1) }
-func BenchmarkTransformDir_50files_par(b *testing.B)  { benchmarkTransformDir(b, 50, 0) }
+func BenchmarkTransformDir_50files_seq(b *testing.B) { benchmarkTransformDir(b, 50, 1) }
+func BenchmarkTransformDir_50files_par(b *testing.B) { benchmarkTransformDir(b, 50, runtime.NumCPU()) }
 
 // 100 files
 func BenchmarkTransformDir_100files_seq(b *testing.B) { benchmarkTransformDir(b, 100, 1) }
-func BenchmarkTransformDir_100files_par(b *testing.B) { benchmarkTransformDir(b, 100, 0) }
+func BenchmarkTransformDir_100files_par(b *testing.B) { benchmarkTransformDir(b, 100, runtime.NumCPU()) }
 
 // 200 files
 func BenchmarkTransformDir_200files_seq(b *testing.B) { benchmarkTransformDir(b, 200, 1) }
-func BenchmarkTransformDir_200files_par(b *testing.B) { benchmarkTransformDir(b, 200, 0) }
+func BenchmarkTransformDir_200files_par(b *testing.B) { benchmarkTransformDir(b, 200, runtime.NumCPU()) }
 
 // 4 workers (lower overhead than 12)
 func BenchmarkTransformDir_100files_4w(b *testing.B)  { benchmarkTransformDir(b, 100, 4) }
