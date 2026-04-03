@@ -5,11 +5,30 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/fastschema/qjs"
 )
+
+// defineRe extracts custom element tag names from customElements.define() calls
+// without executing the bundle. Valid custom element names must contain a hyphen.
+var defineRe = regexp.MustCompile(`customElements\s*\.\s*define\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
+
+// discoveryJS is the snippet evaluated inside QJS to read registered tag names
+// from the DOM shim's customElements.__definitions map.
+const discoveryJS = `(function() {
+	const reg = customElements;
+	if (reg && reg.__definitions) {
+		const names = [];
+		for (const [name] of reg.__definitions) {
+			names.push(name);
+		}
+		return JSON.stringify(names);
+	}
+	return '[]';
+})();`
 
 // Registry manages loaded component bundles and tracks which tag names
 // are available for rendering. All methods are safe for concurrent use.
@@ -37,29 +56,27 @@ func NewRegistry() *Registry {
 }
 
 // LoadDir loads all .golit.bundle.js files from a directory.
-// Each bundle is loaded into a temporary QJS context to discover which
-// tag name it registers, then stored by that tag name.
+// Tag names are discovered via a regex pre-pass; bundles the regex
+// misses are batched through a single reusable QJS engine.
 func (r *Registry) LoadDir(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("reading bundles directory %s: %w", dir, err)
 	}
 
+	var bundles []string
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".golit.bundle.js") {
 			continue
 		}
-		if !strings.HasSuffix(entry.Name(), ".golit.bundle.js") {
-			continue
+		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return fmt.Errorf("reading bundle %s: %w", entry.Name(), err)
 		}
-
-		path := filepath.Join(dir, entry.Name())
-		if err := r.LoadFile(path); err != nil {
-			return err
-		}
+		bundles = append(bundles, string(data))
 	}
 
-	return nil
+	return r.registerBundles(bundles)
 }
 
 // LoadFile loads a single .golit.bundle.js file and discovers its tag name.
@@ -82,6 +99,37 @@ func (r *Registry) LoadFile(path string) error {
 	r.mu.Lock()
 	r.bundles[tagName] = bundle
 	r.mu.Unlock()
+	return nil
+}
+
+// registerBundles discovers tag names for a slice of bundles and registers
+// them. Uses the regex fast path first, then batches remaining bundles
+// through a single QJS engine.
+func (r *Registry) registerBundles(bundles []string) error {
+	var fallbackBundles []string
+
+	r.mu.Lock()
+	for _, bundle := range bundles {
+		if tagName, ok := discoverTagNameFast(bundle); ok {
+			r.bundles[tagName] = bundle
+		} else {
+			fallbackBundles = append(fallbackBundles, bundle)
+		}
+	}
+	r.mu.Unlock()
+
+	if len(fallbackBundles) > 0 {
+		discovered, err := discoverTagNames(fallbackBundles)
+		if err != nil {
+			return err
+		}
+		r.mu.Lock()
+		for j, tagName := range discovered {
+			r.bundles[tagName] = fallbackBundles[j]
+		}
+		r.mu.Unlock()
+	}
+
 	return nil
 }
 
@@ -202,18 +250,12 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		return fmt.Errorf("batch bundling sources: %w", err)
 	}
 
-	// Phase 3: discover tag names and register
-	r.mu.Lock()
-	for _, bundle := range bundles {
-		tagName, err := DiscoverTagName(bundle)
-		if err != nil {
-			continue // skip files that don't define a custom element
-		}
-		r.bundles[tagName] = bundle
+	// Phase 3: discover tag names and register (regex fast path + batched QJS fallback)
+	bundleList := make([]string, 0, len(bundles))
+	for _, b := range bundles {
+		bundleList = append(bundleList, b)
 	}
-	r.mu.Unlock()
-
-	return nil
+	return r.registerBundles(bundleList)
 }
 
 // LoadCompiled loads a single pre-compiled .golit.compiled.js artifact
@@ -268,38 +310,46 @@ func (r *Registry) LoadCompiled(path string) error {
 	return nil
 }
 
-// DiscoverTagName loads a bundle in a temporary QJS context and checks
-// which tag name was registered via customElements.define().
+// DiscoverTagName loads a bundle and returns the custom element tag name it
+// registers. It tries a fast regex pre-pass first; if that misses, it falls
+// back to executing the bundle in a temporary QJS context.
 func DiscoverTagName(bundle string) (string, error) {
 	return discoverTagName(bundle)
 }
 
+// discoverTagNameFast extracts the tag name from a customElements.define()
+// call using a regex, avoiding QJS entirely. Returns ("", false) when the
+// regex cannot find a match.
+func discoverTagNameFast(bundle string) (string, bool) {
+	matches := defineRe.FindAllStringSubmatch(bundle, -1)
+	if len(matches) == 0 {
+		return "", false
+	}
+	return matches[len(matches)-1][1], true
+}
+
 func discoverTagName(bundle string) (string, error) {
+	if tagName, ok := discoverTagNameFast(bundle); ok {
+		return tagName, nil
+	}
+
 	engine, err := NewEngine()
 	if err != nil {
 		return "", err
 	}
 	defer engine.Close()
 
+	return discoverTagNameEngine(engine, bundle)
+}
+
+// discoverTagNameEngine runs a single bundle through an already-initialized
+// QJS engine and returns the last registered tag name.
+func discoverTagNameEngine(engine *Engine, bundle string) (string, error) {
 	if err := engine.LoadBundle(bundle); err != nil {
 		return "", err
 	}
 
-	// Query the custom elements registry for defined elements
-	result, err := engine.ctx.Eval("discover.js", qjs.Code(`
-		(function() {
-			// Our DOM shim's customElements stores definitions in __definitions
-			const reg = customElements;
-			if (reg && reg.__definitions) {
-				const names = [];
-				for (const [name] of reg.__definitions) {
-					names.push(name);
-				}
-				return JSON.stringify(names);
-			}
-			return '[]';
-		})();
-	`))
+	result, err := engine.ctx.Eval("discover.js", qjs.Code(discoveryJS))
 	if err != nil {
 		return "", fmt.Errorf("querying tag names: %w", err)
 	}
@@ -313,6 +363,37 @@ func discoverTagName(bundle string) (string, error) {
 		return "", fmt.Errorf("no custom elements registered in bundle")
 	}
 
-	// Return the last registered name (typically the main component)
 	return names[len(names)-1], nil
+}
+
+// discoverTagNames runs a batch of bundles through a single reusable QJS
+// engine, resetting between each. Returns a map of input index to tag name
+// for bundles that successfully registered a custom element.
+func discoverTagNames(bundles []string) (map[int]string, error) {
+	if len(bundles) == 0 {
+		return nil, nil
+	}
+
+	engine, err := NewEngine()
+	if err != nil {
+		return nil, err
+	}
+	defer engine.Close()
+
+	results := make(map[int]string, len(bundles))
+
+	for i, bundle := range bundles {
+		name, err := discoverTagNameEngine(engine, bundle)
+		if err == nil {
+			results[i] = name
+		}
+
+		if i < len(bundles)-1 {
+			if err := engine.Reset(); err != nil {
+				return results, fmt.Errorf("resetting discovery engine: %w", err)
+			}
+		}
+	}
+
+	return results, nil
 }
