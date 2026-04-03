@@ -65,14 +65,23 @@ func benchmarkTransformDir(b *testing.B, fileCount, concurrency int) {
 	bundleDir := setupBenchBundles(b)
 	htmlDir := setupBenchHTML(b, fileCount)
 
+	entries, _ := os.ReadDir(htmlDir)
+	origData := make(map[string][]byte, len(entries))
+	for _, e := range entries {
+		data, _ := os.ReadFile(filepath.Join(htmlDir, e.Name()))
+		origData[e.Name()] = data
+	}
+
+	workDir, err := os.MkdirTemp("", "golit-bench-*")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(workDir)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Copy HTML files fresh each iteration (transform modifies in-place)
-		workDir := b.TempDir()
-		entries, _ := os.ReadDir(htmlDir)
-		for _, e := range entries {
-			data, _ := os.ReadFile(filepath.Join(htmlDir, e.Name()))
-			os.WriteFile(filepath.Join(workDir, e.Name()), data, 0644)
+		for name, data := range origData {
+			os.WriteFile(filepath.Join(workDir, name), data, 0644)
 		}
 
 		_, err := transformer.TransformDir(workDir, transformer.Options{
