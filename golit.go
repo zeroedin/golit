@@ -43,6 +43,10 @@ type RendererOptions struct {
 // single-threaded; calling RenderHTML, RenderFragment, or RegisterComponent
 // from multiple goroutines concurrently will race. To render concurrently,
 // create a separate Renderer per goroutine or protect calls with a mutex.
+//
+// Methods do not currently accept a context.Context, so long-running
+// operations (e.g. TransformDir on large sites) cannot be cancelled.
+// This may be added in a future version.
 type Renderer struct {
 	engine   *jsengine.Engine
 	registry *jsengine.Registry
