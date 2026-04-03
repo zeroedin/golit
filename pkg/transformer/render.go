@@ -236,10 +236,6 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 				templateNode.AppendChild(sn)
 			}
 
-			if depth > 0 {
-				p.node.Attr = append(p.node.Attr, html.Attribute{Key: "defer-hydration"})
-			}
-
 			if p.node.FirstChild != nil {
 				p.node.InsertBefore(templateNode, p.node.FirstChild)
 			} else {

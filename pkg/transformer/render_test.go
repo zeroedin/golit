@@ -193,7 +193,7 @@ func TestRenderFragment_UnregisteredElement(t *testing.T) {
 	}
 }
 
-func TestRenderFragment_NestedElements_DeferHydration(t *testing.T) {
+func TestRenderFragment_NestedElements_NoDeferHydration(t *testing.T) {
 	engine := newMockEngine()
 	engine.addComponent("outer-el", `<inner-el></inner-el>`, "")
 	engine.addComponent("inner-el", "<p>nested</p>", "")
@@ -208,11 +208,34 @@ func TestRenderFragment_NestedElements_DeferHydration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(output, "defer-hydration") {
-		t.Error("nested element should have defer-hydration attribute")
+	if strings.Contains(output, "defer-hydration") {
+		t.Error("golit should not inject defer-hydration; it is an opt-in attribute for developers")
 	}
 	if !strings.Contains(output, "<p>nested</p>") {
 		t.Error("nested element should be rendered")
+	}
+}
+
+func TestRenderFragment_LightDOMChildren_NoDeferHydration(t *testing.T) {
+	engine := newMockEngine()
+	engine.addComponent("parent-el", `<slot></slot>`, "")
+	engine.addComponent("child-el", "<p>child</p>", "")
+
+	registry := jsengine.NewRegistry()
+	registry.Register("parent-el", "fake-bundle")
+	registry.Register("child-el", "fake-bundle")
+
+	output, err := RenderFragmentWithEngine(
+		`<parent-el><child-el></child-el></parent-el>`, engine, registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(output, `child-el defer-hydration`) {
+		t.Error("light DOM child element should not have defer-hydration")
+	}
+	if !strings.Contains(output, "<p>child</p>") {
+		t.Error("light DOM child should still be rendered")
 	}
 }
 
