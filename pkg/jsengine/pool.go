@@ -31,24 +31,25 @@ func NewEnginePool(size int) (*EnginePool, error) {
 	return p, nil
 }
 
-// PreloadAll loads every bundle from the registry into every engine in the
-// pool, and configures preload modules. After this call the registry must
-// be treated as read-only.
-func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string) error {
+// PreloadAll drains every engine from the pool, configures preload modules,
+// loads any raw preload bundles, then loads all registry component bundles.
+// After this call the registry must be treated as read-only.
+func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
 	drained := make([]*Engine, 0, p.size)
 
-	// Drain all engines so we can configure each one.
 	for i := 0; i < p.size; i++ {
 		e := <-p.engines
 		e.SetPreloadModules(preloadModules)
+		for _, pb := range preloadBundles {
+			_ = e.LoadBundle(pb)
+		}
 		for _, tag := range tags {
 			e.LoadBundleForTag(tag, registry)
 		}
 		drained = append(drained, e)
 	}
 
-	// Return them.
 	for _, e := range drained {
 		p.engines <- e
 	}

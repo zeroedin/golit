@@ -352,24 +352,9 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 	}
 	defer pool.Close()
 
-	// Load preload bundles into every engine in the pool.
-	// We need to do this before PreloadAll since preload bundles
-	// may register modules that component bundles depend on.
-	drained := make([]*jsengine.Engine, workers)
-	for i := 0; i < workers; i++ {
-		e := pool.Get()
-		e.SetPreloadModules(opts.Preload)
-		for _, pb := range preloadBundles {
-			_ = e.LoadBundle(pb)
-		}
-		drained[i] = e
-	}
-	for _, e := range drained {
-		pool.Put(e)
-	}
-
-	// Pre-load all discovered component bundles into every engine.
-	if err := pool.PreloadAll(registry, opts.Preload); err != nil {
+	// Pre-load preload bundles and component bundles into every engine
+	// in a single drain pass.
+	if err := pool.PreloadAll(registry, opts.Preload, preloadBundles...); err != nil {
 		return nil, fmt.Errorf("preloading pool: %w", err)
 	}
 
