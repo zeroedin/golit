@@ -762,7 +762,11 @@ func collectUnexpanded(node *html.Node, ctx *transformContext) []pendingElement 
 		}
 		if n.Type == html.ElementNode && strings.Contains(n.Data, "-") {
 			if !ctx.ignored[n.Data] && !hasDeclarativeShadowRoot(n) {
-				if ctx.engine.LoadBundleForTag(n.Data, ctx.registry) || ctx.engine.IsRegistered(n.Data) {
+				loaded, loadErr := ctx.engine.LoadBundleForTag(n.Data, ctx.registry)
+				if loadErr != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: %v\n", loadErr)
+				}
+				if loaded || ctx.engine.IsRegistered(n.Data) {
 					pending = append(pending, pendingElement{node: n, depth: depth})
 					return // don't recurse into this node's children yet
 				}

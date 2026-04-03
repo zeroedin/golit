@@ -221,7 +221,8 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	var paths []string
 	if err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil // skip inaccessible paths
+			fmt.Fprintf(os.Stderr, "golit: warning: skipping %s: %v\n", path, err)
+			return nil
 		}
 		if info.IsDir() {
 			return nil

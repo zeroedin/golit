@@ -143,23 +143,24 @@ func (e *Engine) shimDynamicImports(code string) string {
 }
 
 // LoadBundleForTag loads a bundle from the registry for a specific tag name.
-// Returns false if the tag is not in the registry.
-func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) bool {
+// Returns (true, nil) if loaded or already loaded, (false, nil) if the tag
+// is not in the registry, or (false, err) if loading failed.
+func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, error) {
 	if e.loaded[tagName] {
-		return true
+		return true, nil
 	}
 
 	bundle := registry.Lookup(tagName)
 	if bundle == "" {
-		return false
+		return false, nil
 	}
 
 	if err := e.LoadBundle(bundle); err != nil {
-		return false
+		return false, fmt.Errorf("loading bundle for <%s>: %w", tagName, err)
 	}
 
 	e.loaded[tagName] = true
-	return true
+	return true, nil
 }
 
 // RenderElement creates an instance of a custom element, sets attributes

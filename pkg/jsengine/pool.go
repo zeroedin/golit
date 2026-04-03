@@ -1,6 +1,9 @@
 package jsengine
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // EnginePool manages a fixed set of QJS Engine instances for concurrent use.
 // Each engine is an isolated WASM module instance (via wazero) and can safely
@@ -45,7 +48,9 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 			_ = e.LoadBundle(pb)
 		}
 		for _, tag := range tags {
-			e.LoadBundleForTag(tag, registry)
+			if _, err := e.LoadBundleForTag(tag, registry); err != nil {
+				fmt.Fprintf(os.Stderr, "golit: warning: %v\n", err)
+			}
 		}
 		drained = append(drained, e)
 	}

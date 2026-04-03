@@ -90,6 +90,7 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 	var paths []string
 	if err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: skipping %s: %v\n", path, err)
 			return nil
 		}
 		if info.IsDir() {
