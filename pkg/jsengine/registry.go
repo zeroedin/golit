@@ -6,13 +6,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/fastschema/qjs"
 )
 
 // Registry manages loaded component bundles and tracks which tag names
-// are available for rendering.
+// are available for rendering. All methods are safe for concurrent use.
 type Registry struct {
+	mu sync.RWMutex
+
 	// bundles maps tag names to their bundle JS content
 	bundles map[string]string
 
@@ -76,28 +79,38 @@ func (r *Registry) LoadFile(path string) error {
 		return nil
 	}
 
+	r.mu.Lock()
 	r.bundles[tagName] = bundle
+	r.mu.Unlock()
 	return nil
 }
 
 // Register adds a bundle by tag name directly (for programmatic use).
 func (r *Registry) Register(tagName string, bundle string) {
+	r.mu.Lock()
 	r.bundles[tagName] = bundle
+	r.mu.Unlock()
 }
 
 // Lookup returns the bundle JS for a given tag name, or "" if not found.
 func (r *Registry) Lookup(tagName string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.bundles[tagName]
 }
 
 // Has returns true if a bundle is registered for the given tag name.
 func (r *Registry) Has(tagName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	_, ok := r.bundles[tagName]
 	return ok
 }
 
 // TagNames returns all registered tag names.
 func (r *Registry) TagNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.bundles))
 	for name := range r.bundles {
 		names = append(names, name)
@@ -108,12 +121,16 @@ func (r *Registry) TagNames() []string {
 // MarkUnregistered records a custom element tag that was encountered
 // but not found in the registry.
 func (r *Registry) MarkUnregistered(tagName string) {
+	r.mu.Lock()
 	r.unregistered[tagName] = true
+	r.mu.Unlock()
 }
 
 // Unregistered returns all custom element tags that were encountered
 // but not in the registry.
 func (r *Registry) Unregistered() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	tags := make([]string, 0, len(r.unregistered))
 	for tag := range r.unregistered {
 		tags = append(tags, tag)
@@ -123,16 +140,22 @@ func (r *Registry) Unregistered() []string {
 
 // HasPath returns true if a source file path has already been processed.
 func (r *Registry) HasPath(path string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	return r.processedPaths[path]
 }
 
 // MarkPath records a source file path as processed.
 func (r *Registry) MarkPath(path string) {
+	r.mu.Lock()
 	r.processedPaths[path] = true
+	r.mu.Unlock()
 }
 
 // ProcessedPaths returns all source file paths that have been processed.
 func (r *Registry) ProcessedPaths() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	paths := make([]string, 0, len(r.processedPaths))
 	for p := range r.processedPaths {
 		paths = append(paths, p)
@@ -180,6 +203,7 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	}
 
 	// Phase 3: discover tag names and register
+	r.mu.Lock()
 	for _, bundle := range bundles {
 		tagName, err := DiscoverTagName(bundle)
 		if err != nil {
@@ -187,6 +211,7 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		}
 		r.bundles[tagName] = bundle
 	}
+	r.mu.Unlock()
 
 	return nil
 }
@@ -234,9 +259,11 @@ func (r *Registry) LoadCompiled(path string) error {
 		return fmt.Errorf("parsing compiled registry: %w", err)
 	}
 
+	r.mu.Lock()
 	for _, name := range names {
 		r.bundles[name] = content
 	}
+	r.mu.Unlock()
 
 	return nil
 }
