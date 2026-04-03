@@ -4,10 +4,15 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/fastschema/qjs"
 )
+
+// validTagName matches the custom element name spec: starts with [a-z],
+// contains at least one hyphen, and only [a-z0-9-._] characters.
+var validTagName = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[-._][a-z0-9]+)+$`)
 
 //go:embed helpers.js
 var helpersJS string
@@ -160,6 +165,10 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) bool {
 // RenderElement creates an instance of a custom element, sets attributes
 // on it, calls render(), and returns the rendered HTML and CSS.
 func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*RenderResult, error) {
+	if !validTagName.MatchString(tagName) {
+		return nil, fmt.Errorf("invalid custom element name: %q", tagName)
+	}
+
 	attrsJSON, err := json.Marshal(attrs)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling attrs: %w", err)
@@ -313,6 +322,9 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 
 // IsRegistered checks if a tag name is registered in the QJS custom elements registry.
 func (e *Engine) IsRegistered(tagName string) bool {
+	if !validTagName.MatchString(tagName) {
+		return false
+	}
 	result, err := e.ctx.Eval("check.js", qjs.Code(fmt.Sprintf(
 		`customElements.get('%s') !== undefined ? 'true' : 'false'`, tagName)))
 	if err != nil {
