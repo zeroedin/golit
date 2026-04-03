@@ -56,6 +56,11 @@ func WriteFileAtomic(destPath string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("renaming temp file: %w", err)
 	}
 
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+
 	success = true
 	return nil
 }
