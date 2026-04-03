@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/evanw/esbuild/pkg/api"
 	"github.com/sspriggs/golit/pkg/fileutil"
@@ -19,6 +20,33 @@ var DOMShimJS string
 
 //go:embed templatecollector.js
 var templateCollectorJS string
+
+var (
+	shimOnce      sync.Once
+	shimDir       string
+	shimPath      string
+	collectorPath string
+	shimErr       error
+)
+
+// ensureShimDir writes the embedded DOM shim and template collector to a
+// temp directory once per process. All esbuild invocations share these
+// files via esbuild's Inject option.
+func ensureShimDir() (string, string, string, error) {
+	shimOnce.Do(func() {
+		shimDir, shimErr = os.MkdirTemp("", "golit-shim-*")
+		if shimErr != nil {
+			return
+		}
+		shimPath = filepath.Join(shimDir, "domshim.js")
+		if shimErr = os.WriteFile(shimPath, []byte(DOMShimJS), 0644); shimErr != nil {
+			return
+		}
+		collectorPath = filepath.Join(shimDir, "templatecollector.js")
+		shimErr = os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644)
+	})
+	return shimPath, collectorPath, shimDir, shimErr
+}
 
 // BundleOptions configures the component bundling.
 type BundleOptions struct {
@@ -63,20 +91,9 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 		return "", fmt.Errorf("component file not found: %s", absPath)
 	}
 
-	shimDir, err := os.MkdirTemp("", "golit-shim-*")
+	sp, cp, _, err := ensureShimDir()
 	if err != nil {
-		return "", fmt.Errorf("creating temp dir: %w", err)
-	}
-	defer os.RemoveAll(shimDir)
-
-	shimPath := filepath.Join(shimDir, "domshim.js")
-	if err := os.WriteFile(shimPath, []byte(DOMShimJS), 0644); err != nil {
-		return "", fmt.Errorf("writing DOM shim: %w", err)
-	}
-
-	collectorPath := filepath.Join(shimDir, "templatecollector.js")
-	if err := os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644); err != nil {
-		return "", fmt.Errorf("writing template collector: %w", err)
+		return "", fmt.Errorf("preparing shim files: %w", err)
 	}
 
 	nodeModulesDir := findNodeModules(absPath)
@@ -88,7 +105,7 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 		Format:           api.FormatESModule,
 		Target:           api.ES2022,
 		Platform:         api.PlatformNeutral,
-		Inject:           []string{shimPath, collectorPath},
+		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
@@ -210,20 +227,9 @@ func BundleComponents(componentPaths []string, opts ...BundleOptions) (map[strin
 		return nil, nil
 	}
 
-	// Write shim files once
-	shimDir, err := os.MkdirTemp("", "golit-shim-*")
+	sp, cp, sd, err := ensureShimDir()
 	if err != nil {
-		return nil, fmt.Errorf("creating temp dir: %w", err)
-	}
-	defer os.RemoveAll(shimDir)
-
-	shimPath := filepath.Join(shimDir, "domshim.js")
-	if err := os.WriteFile(shimPath, []byte(DOMShimJS), 0644); err != nil {
-		return nil, fmt.Errorf("writing DOM shim: %w", err)
-	}
-	collectorPath := filepath.Join(shimDir, "templatecollector.js")
-	if err := os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644); err != nil {
-		return nil, fmt.Errorf("writing template collector: %w", err)
+		return nil, fmt.Errorf("preparing shim files: %w", err)
 	}
 
 	// Find node_modules from the first entry point
@@ -247,9 +253,9 @@ func BundleComponents(componentPaths []string, opts ...BundleOptions) (map[strin
 		Format:              api.FormatESModule,
 		Target:              api.ES2022,
 		Platform:            api.PlatformNeutral,
-		Inject:              []string{shimPath, collectorPath},
+		Inject:              []string{sp, cp},
 		Write:               false,
-		Outdir:              shimDir, // required for multiple entry points; not written (Write:false)
+		Outdir:              sd, // required for multiple entry points; not written (Write:false)
 		MinifyWhitespace:    opt.Minify,
 		MinifySyntax:        opt.Minify,
 		NodePaths:           []string{nodeModulesDir},
@@ -381,19 +387,9 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 		opt = opts[0]
 	}
 
-	shimDir, err := os.MkdirTemp("", "golit-shim-*")
+	sp, cp, _, err := ensureShimDir()
 	if err != nil {
-		return "", fmt.Errorf("creating temp dir: %w", err)
-	}
-	defer os.RemoveAll(shimDir)
-
-	shimPath := filepath.Join(shimDir, "domshim.js")
-	if err := os.WriteFile(shimPath, []byte(DOMShimJS), 0644); err != nil {
-		return "", fmt.Errorf("writing DOM shim: %w", err)
-	}
-	collectorPath := filepath.Join(shimDir, "templatecollector.js")
-	if err := os.WriteFile(collectorPath, []byte(templateCollectorJS), 0644); err != nil {
-		return "", fmt.Errorf("writing template collector: %w", err)
+		return "", fmt.Errorf("preparing shim files: %w", err)
 	}
 
 	cwd, _ := os.Getwd()
@@ -409,7 +405,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 		Format:           api.FormatESModule,
 		Target:           api.ES2022,
 		Platform:         api.PlatformNeutral,
-		Inject:           []string{shimPath, collectorPath},
+		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
