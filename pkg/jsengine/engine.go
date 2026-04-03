@@ -304,7 +304,7 @@ type BatchResult struct {
 const batchRenderSuffix = `;const results=[];` +
 	`for(const req of requests){` +
 	`const Ctor=customElements.get(req.tagName);` +
-	`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered'});continue;}` +
+	`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered',tagName:req.tagName});continue;}` +
 	`try{` +
 	`const el=new Ctor();` +
 	`for(const [key,value] of Object.entries(req.attrs||{})){` +

@@ -186,17 +186,19 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 		}
 
 		resultSlice := make([]jsengine.BatchResult, len(pending))
+		populated := make([]bool, len(pending))
 		for _, r := range results {
 			if r.ID >= 0 && r.ID < len(resultSlice) {
 				resultSlice[r.ID] = r
+				populated[r.ID] = true
 			}
 		}
 
 		for i, p := range pending {
-			r := resultSlice[i]
-			if r.TagName == "" {
+			if !populated[i] {
 				continue
 			}
+			r := resultSlice[i]
 			if r.Error != "" {
 				ctx.renderErrors = append(ctx.renderErrors, RenderError{
 					TagName: p.node.Data,
