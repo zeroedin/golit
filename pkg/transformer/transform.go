@@ -320,9 +320,9 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating engine pool: %w", err)
 	}
-	defer pool.Close()
 
 	if err := pool.PreloadAll(registry, opts.Preload, preloadBundles...); err != nil {
+		pool.Close()
 		return nil, nil, fmt.Errorf("preloading pool: %w", err)
 	}
 
@@ -387,6 +387,7 @@ func transformParallel(htmlFiles []string, dir string, registry *jsengine.Regist
 	}
 
 	checkEngine := pool.Get()
+	pool.Close()
 
 	return &Result{
 		FilesProcessed: processed,
