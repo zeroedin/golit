@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/evanw/esbuild/pkg/api"
+	"github.com/sspriggs/golit/pkg/fileutil"
 )
 
 //go:embed domshim.js
@@ -688,13 +689,13 @@ func ResolveModulePath(specifier string, fromDir string) (string, error) {
 	return resolved, nil
 }
 
-// SaveBundle writes a bundle string to a file.
+// SaveBundle writes a bundle string to a file atomically.
 func SaveBundle(bundle string, path string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	return os.WriteFile(path, []byte(bundle), 0644)
+	return fileutil.WriteFileAtomic(path, []byte(bundle), 0644)
 }
 
 // patternToRegex converts a glob-like pattern to a regex string for esbuild.
