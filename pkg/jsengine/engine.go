@@ -59,7 +59,11 @@ func NewEngine() (*Engine, error) {
 // global scope once, so they don't need to be re-sent with every
 // RenderElement call.
 func (e *Engine) initHelpers() error {
-	_, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS))
+	if _, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS)); err != nil {
+		return err
+	}
+	_, err := e.ctx.Eval("css-cache-init.js", qjs.Code(
+		`if(!globalThis.__cssCache)globalThis.__cssCache=new Map();`))
 	return err
 }
 
@@ -226,10 +230,12 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 				}
 
 				let css = '';
-				if (Ctor.styles) {
-					css = extractStyles(Ctor.styles);
-				} else if (Ctor.elementStyles) {
-					css = extractStyles(Ctor.elementStyles);
+				if (globalThis.__cssCache.has(Ctor)) {
+					css = globalThis.__cssCache.get(Ctor);
+				} else {
+					if (Ctor.styles) { css = extractStyles(Ctor.styles); }
+					else if (Ctor.elementStyles) { css = extractStyles(Ctor.elementStyles); }
+					globalThis.__cssCache.set(Ctor, css);
 				}
 
 				return JSON.stringify({ html, css, tagName: '%s' });
@@ -297,8 +303,10 @@ const batchRenderSuffix = `;const results=[];` +
 	`const propName=attributeToProperty(Ctor,key);` +
 	`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
 	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render());}` +
-	`let css='';if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
+	`let css='';if(globalThis.__cssCache.has(Ctor)){css=globalThis.__cssCache.get(Ctor);}` +
+	`else{if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
 	`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
+	`globalThis.__cssCache.set(Ctor,css);}` +
 	`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
 	`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
 	`return JSON.stringify(results);})();`
