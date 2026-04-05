@@ -11,6 +11,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-breadcrumb>
     <ol>
@@ -34,10 +35,12 @@ lightdom:
     </ol>
   </rh-breadcrumb>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### custom accessible label
 
+{{< raw >}}
 <rh-breadcrumb accessible-label="Breadcrumb Navigation">
   <ol>
     <li><a href="#">Home</a></li>
@@ -48,10 +51,12 @@ lightdom:
     <li><a href="#" aria-current="page">Chapter 1. Understanding ROSA</a></li>
   </ol>
 </rh-breadcrumb>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-breadcrumb>
   <ol>
     <li><a href="#">Home</a></li>
@@ -62,10 +67,12 @@ lightdom:
     <li><a href="#" aria-current="page">Chapter 1. Understanding ROSA</a></li>
   </ol>
 </rh-breadcrumb>
+{{< /raw >}}
 
 
 ### non interactive last item
 
+{{< raw >}}
 <rh-breadcrumb>
   <ol>
     <li><a href="#">Home</a></li>
@@ -87,10 +94,12 @@ lightdom:
     <li>Chapter 1. Understanding ROSA</li>
   </ol>
 </rh-breadcrumb>
+{{< /raw >}}
 
 
 ### subtle
 
+{{< raw >}}
 <rh-breadcrumb variant="subtle">
   <ol>
     <li><a href="#">Home</a></li>
@@ -101,10 +110,12 @@ lightdom:
     <li><a href="#" aria-current="page">Chapter 1. Understanding ROSA</a></li>
   </ol>
 </rh-breadcrumb>
+{{< /raw >}}
 
 
 ### truncate
 
+{{< raw >}}
 <rh-breadcrumb truncate>
   <ol>
     <li><a href="#home">Home</a></li>
@@ -115,4 +126,5 @@ lightdom:
     <li><a href="#understanding-rosa" aria-current="page">Chapter 1. Understanding ROSA</a></li>
   </ol>
 </rh-breadcrumb>
+{{< /raw >}}
 

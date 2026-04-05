@@ -13,15 +13,18 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-disclosure summary="Collapsed panel title">
     <p>Lorem ipsum dolor sit amet consectetur adipisicing, elit. Velit distinctio, nesciunt nobis sit.</p>
   </rh-disclosure>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### events
 
+{{< raw >}}
 <form id="disclosure-events">
   <rh-disclosure summary="Collapsed panel title">
     <p>Lorem ipsum dolor <a href="#">sit amet consectetur</a> adipisicing, elit. Velit distinctio, nesciunt nobis sit, a dolor, non numquam rerum recusandae, deserunt enim assumenda quidem. Id impedit necessitatibus obcaecati ratione reprehenderit laborum?</p>
@@ -31,17 +34,21 @@ lightdom:
     <output name="events">No events yet</output>
   </fieldset>
 </form>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-disclosure summary="Collapsed panel title">
   <p>Lorem ipsum dolor sit amet consectetur adipisicing, elit. Velit distinctio, nesciunt nobis sit, a dolor, non numquam rerum recusandae, deserunt enim assumenda quidem. Id impedit necessitatibus obcaecati ratione reprehenderit laborum?</p>
 </rh-disclosure>
+{{< /raw >}}
 
 
 ### nested disclosures
 
+{{< raw >}}
 <rh-disclosure summary="This is the top level disclosure">
   <p>Try not to nest disclosures. If nesting, consider using an accordion instead. Lorem ipsum <a href="#">dolor</a>.</p>
   <rh-disclosure summary="This is the second level disclosure">
@@ -83,10 +90,12 @@ lightdom:
     <p>This is a sentence with <a href="#">a link</a>.</p>
   </rh-disclosure>
 </rh-disclosure>
+{{< /raw >}}
 
 
 ### nested jump links
 
+{{< raw >}}
 <rh-disclosure>
   <h2 slot="summary" id="sections">Sections</h2>
   <rh-jump-links aria-labelledby="sections">
@@ -97,10 +106,12 @@ lightdom:
     <rh-jump-link href="#section-5">Section 5</rh-jump-link>
   </rh-jump-links>
 </rh-disclosure>
+{{< /raw >}}
 
 
 ### slotted summary
 
+{{< raw >}}
 <rh-disclosure>
   <span slot="summary" class="icon">
     This is a slotted summary with extra markup <rh-icon set="ui" icon="like"></rh-icon>
@@ -108,10 +119,12 @@ lightdom:
   <p>Instead of using <code>&lt;rh-disclosure summary="Hello world"&gt;</code>, users can slot content into a <code>summary</code> slot and include additional HTML if needed.</p>
   <p>Also note that slotted <code>summary</code> content will render on the page if/when JavaScript fails to load.</p>
 </rh-disclosure>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <div class="container">
   <rh-disclosure summary="Compact variant disclosure" variant="compact">
     <p>Lorem ipsum dolor sit amet consectetur adipisicing, elit. Velit distinctio, nesciunt nobis sit, a dolor, non numquam rerum recusandae, deserunt enim assumenda quidem. Id impedit necessitatibus obcaecati ratione reprehenderit laborum?</p>
@@ -123,4 +136,5 @@ lightdom:
     <p>Lorem ipsum dolor sit amet consectetur adipisicing, elit. Velit distinctio, nesciunt nobis sit, a dolor, non numquam rerum recusandae, deserunt enim assumenda quidem. Id impedit necessitatibus obcaecati ratione reprehenderit laborum?</p>
   </rh-disclosure>
 </div>
+{{< /raw >}}
 

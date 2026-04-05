@@ -15,6 +15,7 @@ lightdom:
 
 ### accented tiles
 
+{{< raw >}}
 <rh-context-demo>
   <rh-tile-group>
     <rh-tile class="accented-tile">
@@ -31,10 +32,12 @@ lightdom:
     </rh-tile>
   </rh-tile-group>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### checkable
 
+{{< raw >}}
 <rh-tile checkable>
   <h2 slot="headline">Headline</h2>
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -50,10 +53,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <div class="wrap layout">
     <h2>Basic</h2>
@@ -324,10 +329,12 @@ lightdom:
     </rh-tile-group>
   </div>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### color palettes
 
+{{< raw >}}
 <rh-tile color-palette="darkest">
   <h2 slot="headline">Darkest</h2>
   <rh-cta href="#">Call to Action</rh-cta>
@@ -352,10 +359,12 @@ lightdom:
   <h2 slot="headline">Lightest</h2>
   <rh-cta href="#">Call to Action</rh-cta>
 </rh-tile>
+{{< /raw >}}
 
 
 ### compact link with fullwidth image and icon
 
+{{< raw >}}
 <rh-tile compact bleed>
   <rh-icon slot="icon" set="standard" icon="mug"></rh-icon>
   <svg slot="image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120">
@@ -374,19 +383,23 @@ lightdom:
   <h2 slot="headline"><a href="#top">Compact link tile</a></h2>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam eleifend elit set est egestat, a sollicitudn mauris tincidunt.</p>
 </rh-tile>
+{{< /raw >}}
 
 
 ### compact link with icon
 
+{{< raw >}}
 <rh-tile compact desaturated>
   <h2 slot="headline"><a href="#top">Compact link tile</a></h2>
   <rh-icon slot="icon" set="standard" icon="mug"></rh-icon>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam eleifend elit set est egestat, a sollicitudn mauris tincidunt.</p>
 </rh-tile>
+{{< /raw >}}
 
 
 ### compact link with image and icon
 
+{{< raw >}}
 <rh-tile compact>
   <rh-icon slot="icon" set="standard" icon="mug"></rh-icon>
   <svg slot="image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120">
@@ -405,19 +418,23 @@ lightdom:
   <h2 slot="headline"><a href="#top">Compact link tile</a></h2>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam eleifend elit set est egestat, a sollicitudn mauris tincidunt.</p>
 </rh-tile>
+{{< /raw >}}
 
 
 ### compact link with image
 
+{{< raw >}}
 <rh-tile compact desaturated>
   <h2 slot="headline"><a href="#top">Compact link tile</a></h2>
   <rh-icon slot="icon" set="standard" icon="mug"></rh-icon>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam eleifend elit set est egestat, a sollicitudn mauris tincidunt.</p>
 </rh-tile>
+{{< /raw >}}
 
 
 ### compact
 
+{{< raw >}}
 <rh-tile compact>
   <h2 slot="headline"><a href="#top">Link</a></h2>
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -495,10 +512,12 @@ lightdom:
     </svg>
   </a>
 </rh-tile>
+{{< /raw >}}
 
 
 ### custom props
 
+{{< raw >}}
 <rh-context-demo color-palette="light">
   <rh-tile>
     <h2 slot="headline"><a href="#top">Link</a></h2>
@@ -513,10 +532,12 @@ lightdom:
     Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   </rh-tile>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### desaturated heading slotted icon
 
+{{< raw >}}
 <rh-tile desaturated>
   <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
     <path d="M40.3 20.3c.1.3.1.6.1.9 0 3.7-4.5 4.4-7.7 4.4-12.2 0-21.2-7.6-21.2-9.9 0-.2 0-.3.1-.5l-1 2.3c-.2.6-.4 1.2-.4 1.8 0 4.5 10.2 11.4 21.9 11.4 5.2 0 9.1-1.9 9.1-5.4-.1-.9-.2-1.7-.4-2.5l-.5-2.5z"/>
@@ -527,30 +548,36 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### desaturated heading
 
+{{< raw >}}
 <rh-tile desaturated icon="cloud-automation">
   <div slot="title">Title</div>
   <h2 slot="headline"><a href="#top">Link</a></h2>
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### disabled
 
+{{< raw >}}
 <rh-tile disabled>
   <div slot="title">Title</div>
   <h2 slot="headline"><a href="#top">Link</a></h2>
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### form control
 
+{{< raw >}}
 <form id="form">
   <rh-tile-group radio>
     <rh-tile name="radio" value="1"><span slot="headline">Radio 1</span></rh-tile>
@@ -563,10 +590,12 @@ lightdom:
   <rh-button type="submit">Submit</rh-button>
   <output name="output"></output>
 </form>
+{{< /raw >}}
 
 
 ### full width images
 
+{{< raw >}}
 <rh-tile bleed>
   <svg slot="image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 200" width="100%">
     <title>300 X 200 placeholder image</title>
@@ -597,10 +626,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### icon with full width image
 
+{{< raw >}}
 <rh-tile bleed>
   <svg slot="image" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
     <title>300 X 200 placeholder image</title>
@@ -656,10 +687,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### icon with image
 
+{{< raw >}}
 <rh-tile>
   <svg slot="image" xmlns="http://www.w3.org/2000/svg" width="300" height="200">
     <title>300 X 200 placeholder image</title>
@@ -700,10 +733,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### icon
 
+{{< raw >}}
 <rh-tile>
   <rh-icon slot="icon" icon="cloud-automation"></rh-icon>
   <div slot="title">Title</div>
@@ -732,10 +767,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### in flex container
 
+{{< raw >}}
 <rh-tile>
   <img slot="image" src="https://fakeimg.pl/296x50" alt="296 X 50 placeholder image">
   <div slot="title">Title</div>
@@ -749,10 +786,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-tile>
   <img slot="image" src="https://fakeimg.pl/296x50" alt="296 X 50 placeholder image">
   <div slot="title">Title</div>
@@ -760,10 +799,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### link types
 
+{{< raw >}}
 <rh-tile link="private"
          icon="bank-safe"
          icon-set="standard">
@@ -780,10 +821,12 @@ lightdom:
   Lorem ipsum dolor sit amet, consectetur adipiscing elit.
   <div slot="footer">Suspendisse eu turpis elementum</div>
 </rh-tile>
+{{< /raw >}}
 
 
 ### tile group disabled
 
+{{< raw >}}
 <rh-tile-group disabled>
   <rh-tile checked>
     <h2 slot="headline">Headline</h2>
@@ -801,10 +844,12 @@ lightdom:
     <div slot="footer">Suspendisse eu turpis elementum</div>
   </rh-tile>
 </rh-tile-group>
+{{< /raw >}}
 
 
 ### tile group radio disabled
 
+{{< raw >}}
 <rh-tile-group radio disabled>
   <rh-tile checked>
     <h2 slot="headline">Headline</h2>
@@ -822,10 +867,12 @@ lightdom:
     <div slot="footer">Suspendisse eu turpis elementum</div>
   </rh-tile>
 </rh-tile-group>
+{{< /raw >}}
 
 
 ### tile group radio
 
+{{< raw >}}
 <rh-tile-group radio>
   <rh-tile checked>
     <h2 slot="headline">Headline</h2>
@@ -843,10 +890,12 @@ lightdom:
     <div slot="footer">Suspendisse eu turpis elementum</div>
   </rh-tile>
 </rh-tile-group>
+{{< /raw >}}
 
 
 ### tile group
 
+{{< raw >}}
 <rh-tile-group>
   <rh-tile checked>
     <h2 slot="headline">Headline</h2>
@@ -865,10 +914,12 @@ lightdom:
     <div slot="footer">Suspendisse eu turpis elementum</div>
   </rh-tile>
 </rh-tile-group>
+{{< /raw >}}
 
 
 ### without footer content
 
+{{< raw >}}
 <section class="grid">
   <rh-tile>
     <h2 slot="headline"><a href="#top">Tile w/ no footer</a></h2>
@@ -887,4 +938,5 @@ lightdom:
     <h2 slot="headline"><a href="#top">Tile w/ only headline</a></h2>
   </rh-tile>
 </section>
+{{< /raw >}}
 

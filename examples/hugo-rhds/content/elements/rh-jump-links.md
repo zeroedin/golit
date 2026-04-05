@@ -12,6 +12,7 @@ lightdom:
 
 ### horizontal
 
+{{< raw >}}
 <div id="jump-links-horizontal-demo-page-content">
   <aside id="jump-links-container">
     <h2 id="jump-links-title">Sections</h2>
@@ -244,10 +245,12 @@ lightdom:
       maiores alias consequatur aut perferendis doloribus asperiores repellat. </p>
   </article>
 </div>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <div id="jump-links-demo-container">
   <aside>
     <h2 id="sections">Sections</h2>
@@ -262,10 +265,12 @@ lightdom:
   <p>Lorem ipsum dolor sit amet consectetur, adipisicing elit. Impedit itaque veniam animi iure corporis quibusdam error, necessitatibus inventore fugiat, minus natus eaque provident eius facilis.
     Dolorem qui tenetur quaerat facere!</p>
 </div>
+{{< /raw >}}
 
 
 ### nested
 
+{{< raw >}}
 <div id="page-content">
   <aside id="jump-links-container">
     <h2 id="jump-links-title">Sections</h2>
@@ -457,10 +462,12 @@ lightdom:
       maiores alias consequatur aut perferendis doloribus asperiores repellat. </p>
   </article>
 </div>
+{{< /raw >}}
 
 
 ### responsive
 
+{{< raw >}}
 <section id="responsive-container">
   <div class="desktop">
     <h2 id="jump-links-title"
@@ -591,10 +598,12 @@ lightdom:
       maiores alias consequatur aut perferendis doloribus asperiores repellat. </p>
   </article>
 </section>
+{{< /raw >}}
 
 
 ### with content
 
+{{< raw >}}
 <div id="page-content">
   <aside id="jump-links-container">
     <h2 id="jump-links-title">Sections</h2>
@@ -710,4 +719,5 @@ lightdom:
       maiores alias consequatur aut perferendis doloribus asperiores repellat. </p>
   </article>
 </div>
+{{< /raw >}}
 

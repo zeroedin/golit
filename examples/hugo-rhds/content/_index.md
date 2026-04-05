@@ -1,4 +1,3 @@
 ---
-title: "RHDS Elements"
+title: "Red Hat Design System"
 ---
-All RHDS element demos, one page per component.

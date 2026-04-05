@@ -21,6 +21,7 @@ lightdom:
 
 ### in nav primary
 
+{{< raw >}}
 <rh-navigation-primary role="navigation">
   <rh-navigation-primary-item variant="dropdown">
     <span slot="summary">AI</span>
@@ -335,10 +336,12 @@ lightdom:
 <div id="mock">
   <p>Mock Page content <a href="#">Link outside</a></p>
 </div>
+{{< /raw >}}
 
 
 ### in nav secondary
 
+{{< raw >}}
 <rh-navigation-secondary>
    <ul slot="nav" aria-labelledby="logo-id">
     <li><rh-navigation-link href="#link" slot="links">AI</rh-navigation-link></li>
@@ -349,10 +352,12 @@ lightdom:
   </ul>
   <rh-cta slot="cta" href="#">Call to Action</rh-cta>
 </rh-navigation-secondary>
+{{< /raw >}}
 
 
 ### in subnav
 
+{{< raw >}}
 <rh-subnav>
   <rh-navigation-link href="#">Users</rh-navigation-link>
   <rh-navigation-link href="#">Containers</rh-navigation-link>
@@ -362,11 +367,14 @@ lightdom:
   <rh-navigation-link><a href="#network">Network</a></rh-navigation-link>
   <rh-navigation-link href="#cloud" icon="cloud" icon-set="ui">Cloud</rh-navigation-link>
 </rh-subnav>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-navigation-link href="#link">Link</rh-navigation-link>
 <rh-navigation-link><a href="#link">Slotted a href Link</a></rh-navigation-link>
 <rh-navigation-link icon="auto-light-dark-mode" icon-set="ui" href="#ai">Containers</rh-navigation-link>
+{{< /raw >}}
 

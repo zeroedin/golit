@@ -10,6 +10,7 @@ imports:
 
 ### check icon
 
+{{< raw >}}
 <section>
   <form>
     <fieldset>
@@ -23,10 +24,12 @@ imports:
     </fieldset>
   </form>
 </section>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-switch accessible-label="Checked"
              message-on="Checked on"
@@ -65,10 +68,12 @@ imports:
              show-check-icon
              disabled></rh-switch>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### disabled
 
+{{< raw >}}
 <section>
   <form>
     <fieldset>
@@ -90,10 +95,12 @@ imports:
     </fieldset>
   </form>
 </section>
+{{< /raw >}}
 
 
 ### fieldset
 
+{{< raw >}}
 <section>
   <p>A switch toggles the state of a setting (between on and off). Switches provide a more explicit, visible representation on a setting.</p>
   <form>
@@ -138,19 +145,23 @@ imports:
     </fieldset>
   </form>
 </section>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-switch id="switch-a"
            accessible-label="Switch A"
            message-on="Message when on"
            message-off="Message when off"
            checked></rh-switch>
+{{< /raw >}}
 
 
 ### nested in label
 
+{{< raw >}}
 <section>
   <form id="nested-label">
     <fieldset>
@@ -166,10 +177,12 @@ imports:
     </fieldset>
   </form>
 </section>
+{{< /raw >}}
 
 
 ### reversed
 
+{{< raw >}}
 <form>
   <fieldset>
     <legend>Reversed message</legend>
@@ -210,20 +223,24 @@ imports:
     </rh-switch>
   </fieldset>
 </form>
+{{< /raw >}}
 
 
 ### rich messages
 
+{{< raw >}}
 <rh-switch id="switch-a"
            accessible-label="Switch A"
            checked>
   <span slot="message-on">Message when <strong>on</strong></span>
   <span slot="message-off">Message when <strong>off</strong></span>
 </rh-switch>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <form dir="rtl">
   <fieldset>
     <legend>Right To Left - No Label</legend>
@@ -327,10 +344,12 @@ imports:
     </div>
   </fieldset>
 </form>
+{{< /raw >}}
 
 
 ### without messages
 
+{{< raw >}}
 <section>
   <form>
     <fieldset>
@@ -340,4 +359,5 @@ imports:
     </fieldset>
   </form>
 </section>
+{{< /raw >}}
 

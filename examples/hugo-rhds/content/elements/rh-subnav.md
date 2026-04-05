@@ -13,6 +13,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-subnav>
     <a href="#">Users</a>
@@ -24,10 +25,12 @@ lightdom:
     <a href="#">Cloud</a>
   </rh-subnav>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### dynamic
 
+{{< raw >}}
 <rh-subnav id="demo" accessible-label="dynamic">
   <a href="#">Users</a>
   <a href="#">Containers</a>
@@ -37,10 +40,12 @@ lightdom:
   <a href="#">Network</a>
   <a href="#">Cloud</a>
 </rh-subnav>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-subnav>
   <a href="#">Users</a>
   <a href="#">Containers</a>
@@ -50,10 +55,12 @@ lightdom:
   <a href="#">Network</a>
   <a href="#">Cloud</a>
 </rh-subnav>
+{{< /raw >}}
 
 
 ### overflow scroll
 
+{{< raw >}}
 <div class="resizable">
   <rh-subnav label-scroll-left="Scroll back" label-scroll-right="Scroll forward">
     <a href="#">Users</a>
@@ -65,10 +72,12 @@ lightdom:
     <a href="#">Cloud</a>
   </rh-subnav>
 </div>
+{{< /raw >}}
 
 
 ### padded
 
+{{< raw >}}
 <h2>In a container with padding</h2>
 <div class="padded">
   <rh-subnav>
@@ -81,10 +90,12 @@ lightdom:
     <a href="#">Cloud</a>
   </rh-subnav>
 </div>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <div dir="rtl">
   <rh-subnav>
     <a href="#">משתמשים</a>
@@ -96,10 +107,12 @@ lightdom:
     <a href="#">עָנָן</a>
   </rh-subnav>
 </div>
+{{< /raw >}}
 
 
 ### with navigation link
 
+{{< raw >}}
 <rh-subnav>
   <rh-navigation-link href="#">Users</rh-navigation-link>
   <rh-navigation-link href="#">Containers</rh-navigation-link>
@@ -109,4 +122,5 @@ lightdom:
   <rh-navigation-link href="#">Network</rh-navigation-link>
   <rh-navigation-link href="#">Cloud</rh-navigation-link>
 </rh-subnav>
+{{< /raw >}}
 

@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-spinner>
     <p>Loading...</p>
@@ -20,25 +21,33 @@ imports:
     <p>Loading...</p>
   </rh-spinner>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-spinner></rh-spinner>
+{{< /raw >}}
 
 
 ### size medium
 
+{{< raw >}}
 <rh-spinner size="md"></rh-spinner>
+{{< /raw >}}
 
 
 ### size small
 
+{{< raw >}}
 <rh-spinner size="sm"></rh-spinner>
+{{< /raw >}}
 
 
 ### with text label
 
+{{< raw >}}
 <rh-spinner>
   <p>Loading...</p>
 </rh-spinner>
@@ -48,4 +57,5 @@ imports:
 <rh-spinner size="sm">
   <p>Loading...</p>
 </rh-spinner>
+{{< /raw >}}
 

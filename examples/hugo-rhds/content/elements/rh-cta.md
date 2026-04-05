@@ -12,6 +12,7 @@ lightdom:
 
 ### analytics
 
+{{< raw >}}
 <p>In this demo, analytics events involving <code>&lt;rh-cta></code> elements are parsed by a
   document-level analytics event listener. Unlike <code>&lt;pfe-cta></code>, which implemented
   support for analytics internally, <code>&lt;rh-cta></code> users must implement their own
@@ -127,10 +128,12 @@ lightdom:
 </section>
 <h2>Last CTA Analytics Event</h2>
 <json-viewer>{}</json-viewer>
+{{< /raw >}}
 
 
 ### brick
 
+{{< raw >}}
 <div id="grid">
   <rh-cta variant="brick"><a href="#">Link #1</a></rh-cta>
   <rh-cta variant="brick"><a href="#">Link #2</a></rh-cta>
@@ -139,10 +142,12 @@ lightdom:
     <a href="#default">Supercalifragilisticexpialidocious</a>
   </rh-cta>
 </div>
+{{< /raw >}}
 
 
 ### button
 
+{{< raw >}}
 <rh-cta>
   <button>Button</button>
 </rh-cta>
@@ -152,10 +157,12 @@ lightdom:
 <rh-cta variant="secondary">
   <button>Button</button>
 </rh-cta>
+{{< /raw >}}
 
 
 ### color context with lightdom css
 
+{{< raw >}}
 <rh-context-demo>
   <rh-cta><a href="#default">Default</a></rh-cta>
   <rh-cta icon="play-circle"><a href="#default-video">Default Video</a></rh-cta>
@@ -165,10 +172,12 @@ lightdom:
   <rh-cta variant="brick"><a href="#brick">Brick</a></rh-cta>
   <rh-cta variant="brick" icon="play-circle"><a href="#brick-video">Brick Video</a></rh-cta>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-cta><a href="#default">Default</a></rh-cta>
   <rh-cta icon="play-circle"><a href="#default-video">Default Video</a></rh-cta>
@@ -178,10 +187,12 @@ lightdom:
   <rh-cta variant="brick"><a href="#brick">Brick</a></rh-cta>
   <rh-cta variant="brick" icon="play-circle"><a href="#brick-video">Brick Video</a></rh-cta>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### href attribute
 
+{{< raw >}}
 <section>
   <rh-cta href="#default">Default</rh-cta>
   <rh-cta href="#default-video" icon="play-circle">Default Video</rh-cta>
@@ -193,15 +204,19 @@ lightdom:
     <rh-cta href="#brick-icon" variant="brick" icon="user">Brick Icon</rh-cta>
   </div>
 </section>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-cta href="#">Call to Action</rh-cta>
+{{< /raw >}}
 
 
 ### no cta javascript
 
+{{< raw >}}
 <p>&lt;rh-cta&gt; where JavaScript is not loaded, while loading a `lightdom-shim.css`.</p>
 <section id="variants">
   <h2>Variants</h2>
@@ -288,10 +303,12 @@ lightdom:
     </template>
   </shadow-root>
 </section>
+{{< /raw >}}
 
 
 ### resizing
 
+{{< raw >}}
 <section id="resize">
   <div>
     <rh-cta>
@@ -374,10 +391,12 @@ lightdom:
     </rh-cta>
   </div>
 </section>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <section dir="rtl"
          lang="he">
   <header lang="en"
@@ -436,10 +455,12 @@ lightdom:
     </template>
   </shadow-root>
 </section>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <section id="cta-variants">
   <rh-cta href="#default">Default</rh-cta>
   <rh-cta icon="play-circle" href="#default-video">Default Video</rh-cta>
@@ -451,4 +472,5 @@ lightdom:
     <rh-cta variant="brick" icon="users" href="#brick-icon">Brick Icon</rh-cta>
   </div>
 </section>
+{{< /raw >}}
 

@@ -13,6 +13,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-announcement>
     <svg slot="image" width="80" height="48" role="img" aria-label="Sample image">
@@ -26,10 +27,12 @@ lightdom:
     <rh-cta slot="cta" href="#">Learn More</rh-cta>
   </rh-announcement>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### dismissable
 
+{{< raw >}}
 <rh-announcement dismissable>
     <svg slot="image" width="80" height="48" role="img" aria-label="Sample image">
       <rect fill="light-dark(var(--rh-color-surface-dark, #383838), var(--rh-color-surface-light, #e0e0e0))" stroke="var(--rh-color-border-subtle)" stroke-width="2px" width="100%" height="100%" stroke-dasharray="4 4">
@@ -63,10 +66,12 @@ lightdom:
   <p>An announcement with <code>block-start</code> for the value of <code>image position</code>.</p>
   <rh-cta slot="cta" href="#">Learn More</rh-cta>
 </rh-announcement>
+{{< /raw >}}
 
 
 ### events
 
+{{< raw >}}
 <rh-announcement dismissable>
   <svg slot="image" width="80" height="48" role="img" aria-label="Sample image">
     <rect fill="light-dark(var(--rh-color-surface-dark, #383838), var(--rh-color-surface-light, #e0e0e0))" stroke="var(--rh-color-border-subtle)" stroke-width="2px" width="100%" height="100%" stroke-dasharray="4 4">
@@ -78,10 +83,12 @@ lightdom:
   <p>Click the close button to fire the <code>close</code> event.</p>
   <rh-cta slot="cta" href="#">Learn More</rh-cta>
 </rh-announcement>
+{{< /raw >}}
 
 
 ### image position
 
+{{< raw >}}
 <rh-announcement image-position="inline-start">
     <svg slot="image" width="80" height="48" role="img" aria-label="Sample image">
       <rect fill="light-dark(var(--rh-color-surface-dark, #383838), var(--rh-color-surface-light, #e0e0e0))" stroke="var(--rh-color-border-subtle)" stroke-width="2px" width="100%" height="100%" stroke-dasharray="4 4">
@@ -104,10 +111,12 @@ lightdom:
   <p>In this <code>block-start</code> version, the image stays on top of the body content on mobile viewports.</p>
   <rh-cta slot="cta" href="#">Learn More</rh-cta>
 </rh-announcement>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-announcement>
     <svg slot="image" width="80" height="48" role="img" aria-label="Sample image">
       <rect fill="light-dark(var(--rh-color-surface-dark, #383838), var(--rh-color-surface-light, #e0e0e0))" stroke="var(--rh-color-border-subtle)" stroke-width="2px" width="100%" height="100%" stroke-dasharray="4 4">
@@ -119,4 +128,5 @@ lightdom:
   <p>Lorem ipsum dolor sit amet consectetur adipisicing elit adipisicing elit adipisicing elit.</p>
   <rh-cta slot="cta" href="#">Learn More</rh-cta>
 </rh-announcement>
+{{< /raw >}}
 

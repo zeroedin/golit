@@ -10,6 +10,7 @@ imports:
 
 ### basic toggle with anchor links
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle with links</span>
@@ -22,10 +23,12 @@ imports:
     <rh-menu-item href="#" external>Separated, external link</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### basic toggle with fit text
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -37,10 +40,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### basic toggle with icon on left
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <rh-icon slot="toggle-label" set="ui" icon="auto-light-dark-mode"></rh-icon>
@@ -53,10 +58,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -68,10 +75,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### compact borderless variant
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown variant="borderless" layout="compact" accessible-label="Toggle menu">
     <rh-menu-item>Action one</rh-menu-item>
@@ -82,10 +91,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### compact
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown layout="compact" accessible-label="Toggle menu">
     <rh-menu-item>Action one</rh-menu-item>
@@ -96,10 +107,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### disabled
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown disabled>
     <span slot="toggle-label">Basic toggle</span>
@@ -111,10 +124,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### drodown items with icons
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -126,10 +141,12 @@ imports:
     <rh-menu-item><rh-icon slot="icon" set="ui" icon="document"></rh-icon> Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### dropdown items with item descriptions
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -141,10 +158,12 @@ imports:
     <rh-menu-item>Separated action <p slot="description">Description for a separate action</p></rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### dropdown with group headings
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -161,10 +180,12 @@ imports:
     </rh-menu-item-group>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <span slot="toggle-label">Basic toggle</span>
@@ -176,10 +197,12 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 
 
 ### info action icon only
 
+{{< raw >}}
 <div id="menu-dropdown-container">
   <rh-menu-dropdown>
     <rh-icon accessible-label="Toggle menu" slot="toggle-label" set="ui" icon="auto-light-dark-mode"></rh-icon>
@@ -191,4 +214,5 @@ imports:
     <rh-menu-item>Separated action</rh-menu-item>
   </rh-menu-dropdown>
 </div>
+{{< /raw >}}
 

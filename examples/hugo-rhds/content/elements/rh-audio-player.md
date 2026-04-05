@@ -12,6 +12,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo id="player-context-demo" target="player">
   <form slot="controls">
     <label>Poster: <input name="poster" type="checkbox" checked></label>
@@ -450,10 +451,12 @@ lightdom:
     </rh-transcript>
   </rh-audio-player>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### compact wide
 
+{{< raw >}}
 <rh-audio-player id="player"
                  layout="compact-wide"
                  poster="https://www.redhat.com/cms/managed-files/CLH-S7-ep1.png">
@@ -883,10 +886,12 @@ lightdom:
     </rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### compact
 
+{{< raw >}}
 <rh-audio-player id="player"
                  layout="compact"
                  poster="https://www.redhat.com/cms/managed-files/CLH-S7-ep1.png">
@@ -1316,10 +1321,12 @@ lightdom:
     </rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### customization
 
+{{< raw >}}
 <section id="customization">
   <rh-context-demo target="player">
     <form slot="controls">
@@ -1769,10 +1776,12 @@ lightdom:
     </rh-audio-player>
   </rh-context-demo>
 </section>
+{{< /raw >}}
 
 
 ### detailed transcript
 
+{{< raw >}}
 <rh-audio-player layout="full"
                  poster="https://www.redhat.com/cms/managed-files/CLH-S7-ep1.png">
   <p slot="series">Code Comments</p>
@@ -3918,10 +3927,12 @@ lightdom:
             end="33:52">look forward to many more in.</rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### heading levels
 
+{{< raw >}}
 <section id="heading-levels">
   <p>Audio player should automatically calculate it's heading levels</p>
   <h3>Root Level h3</h3>
@@ -6074,10 +6085,12 @@ lightdom:
   <h2>Even with more headings</h2>
   <p>This last heading is allowed to go back up to h2, but the player should still take h3 as its root heading level.</p>
 </section>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-audio-player id="player"
                  layout="full"
                  poster="https://www.redhat.com/cms/managed-files/CLH-S7-ep1.png">
@@ -6507,10 +6520,12 @@ lightdom:
     </rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### language localization
 
+{{< raw >}}
 <rh-audio-player lang="es"
                  layout="full"
                  poster="https://www.redhat.com/cms/managed-files/img-clh-s4e1-hero-455x539_0.png">
@@ -6903,10 +6918,12 @@ lightdom:
     </rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### mini
 
+{{< raw >}}
 <rh-audio-player id="player"
                  layout="mini"
                  poster="https://www.redhat.com/cms/managed-files/CLH-S7-ep1.png">
@@ -7336,10 +7353,12 @@ lightdom:
     </rh-cue>
   </rh-transcript>
 </rh-audio-player>
+{{< /raw >}}
 
 
 ### prevent concurrent playback
 
+{{< raw >}}
 <section id="concurrent">
   <p>Pressing play on any <code>rh-audio-player</code> element will pause
     any other currently playing <code>rh-audio-player</code> elements.</p>
@@ -7366,10 +7385,12 @@ lightdom:
     </audio>
   </rh-audio-player>
 </section>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <section id="rtl">
   <!-- Options for demo -->
   <form>
@@ -7514,4 +7535,5 @@ lightdom:
     </rh-transcript>
   </rh-audio-player>
 </section>
+{{< /raw >}}
 

@@ -9,13 +9,16 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-site-status></rh-site-status>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### domains
 
+{{< raw >}}
 <form id="demo-form">
   <label for="domain">Domain</label>
   <pf-select id="domain">
@@ -31,41 +34,56 @@ imports:
   </pf-select>
   <rh-site-status></rh-site-status>
 </form>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 
 
 ### loading
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 
 
 ### localization
 
+{{< raw >}}
 <rh-site-status>
   <span slot="loading-text">Chargement</span>
 </rh-site-status>
+{{< /raw >}}
 
 
 ### status 404
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 
 
 ### status critical
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 
 
 ### status major
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 
 
 ### status minor
 
+{{< raw >}}
 <rh-site-status></rh-site-status>
+{{< /raw >}}
 

@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-avatar>George Boole
     <span slot="subtitle">Professor of Mathematics, </span>
@@ -31,17 +32,21 @@ imports:
              pattern="triangles"
              plain></rh-avatar>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-avatar name="Omar Khayyam"
            subtitle="Mathematician, Astronomer"
            src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/08/005-a-Ruby-kindles-in-the-vine-810x1146.jpg/212px-005-a-Ruby-kindles-in-the-vine-810x1146.jpg"></rh-avatar>
+{{< /raw >}}
 
 
 ### links
 
+{{< raw >}}
 <figure>
   <figcaption>Links applied to Name</figcaption>
   <rh-avatar src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Jeannette_Wing%2C_Davos_2013.jpg/330px-Jeannette_Wing%2C_Davos_2013.jpg">
@@ -56,10 +61,12 @@ imports:
     <a slot="subtitle" href="https://www.wikiwand.com/en/Queen's_College,_Cork">Queen's College, Cork</a>
   </rh-avatar>
 </figure>
+{{< /raw >}}
 
 
 ### pattern
 
+{{< raw >}}
 <figure>
   <figcaption>Squares pattern</figcaption>
   <rh-avatar name="Alonzo Church"
@@ -72,10 +79,12 @@ imports:
              subtitle="Cryptographer"
              pattern="triangles"></rh-avatar>
 </figure>
+{{< /raw >}}
 
 
 ### plain
 
+{{< raw >}}
 <section id="plain-avatar">
   <rh-avatar name="John von Neumann"
              subtitle="Mathematician"
@@ -93,17 +102,21 @@ imports:
              pattern="triangles"
              plain></rh-avatar>
 </section>
+{{< /raw >}}
 
 
 ### position
 
+{{< raw >}}
 <rh-avatar name="Ada Lovelace"
            subtitle="Computer Programmer"
            layout="block"></rh-avatar>
+{{< /raw >}}
 
 
 ### sizes
 
+{{< raw >}}
 <figure>
   <figcaption><code>--rh-size-icon-03</code></figcaption>
   <rh-avatar name="Radia Perlman"
@@ -137,10 +150,12 @@ imports:
              subtitle="Jewish actress and inventor"
              style="--rh-avatar-size:var(--rh-size-icon-08, 96px);"></rh-avatar>
 </figure>
+{{< /raw >}}
 
 
 ### subtitles
 
+{{< raw >}}
 <rh-avatar src="https://ux.redhat.com/elements/avatar/demo/schoenfinkel.jpg">Moses Schoenfinkle
   <span slot="subtitle">
     Inventor of Combinatorics,
@@ -149,10 +164,12 @@ imports:
     let it slide
   </span>
 </rh-avatar>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <section id="bordered-avatars">
   <rh-avatar name="Bordered von Neumann"
              subtitle="Mathematician"
@@ -162,4 +179,5 @@ imports:
              src="https://ux.redhat.com/elements/avatar/demo/hopper.jpg"
              variant="bordered"></rh-avatar>
 </section>
+{{< /raw >}}
 

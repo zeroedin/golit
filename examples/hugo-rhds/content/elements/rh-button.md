@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-button danger>Danger</rh-button>
   <rh-button>Primary</rh-button>
@@ -29,10 +30,12 @@ imports:
   <rh-button variant="play" icon="information-fill">Play</rh-button>
   <rh-button disabled icon="information-fill">Disabled</rh-button>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### form control
 
+{{< raw >}}
 <form id="form">
   <fieldset id="fieldset">
     <legend>
@@ -55,10 +58,12 @@ imports:
     <output id="output" name="output">Pending</output>
   </fieldset>
 </form>
+{{< /raw >}}
 
 
 ### icon
 
+{{< raw >}}
 <section id="button-with-icon">
   <rh-button icon="error-fill" danger>Danger</rh-button>
   <rh-button icon="information-fill">Primary</rh-button>
@@ -68,15 +73,19 @@ imports:
   <rh-button icon="close" icon-set="microns" variant="tertiary">Tertiary</rh-button>
   <rh-button icon="close" icon-set="microns" disabled>Disabled</rh-button>
 </section>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-button>Primary</rh-button>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <section id="button-variants">
   <rh-button danger>Danger</rh-button>
   <rh-button>Primary</rh-button>
@@ -88,4 +97,5 @@ imports:
   <rh-button variant="play">Play</rh-button>
   <rh-button disabled>Disabled</rh-button>
 </section>
+{{< /raw >}}
 

@@ -13,6 +13,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-dialog trigger="context-trigger">
     <h2 slot="header">Color Context</h2>
@@ -34,10 +35,12 @@ lightdom:
   </rh-dialog>
   <rh-button id="context-trigger">Open Dialog</rh-button>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### events
 
+{{< raw >}}
 <form id="dialog-events">
   <rh-dialog id="dialog" trigger="trigger">
     <h2 slot="header">Modal dialog with a header</h2>
@@ -54,10 +57,12 @@ lightdom:
     <output name="events">No events yet</output>
   </fieldset>
 </form>
+{{< /raw >}}
 
 
 ### form
 
+{{< raw >}}
 <rh-dialog id="dialog-element"  trigger="trigger">
     <form id="form-element"> 
         <p>
@@ -79,10 +84,12 @@ lightdom:
         </rh-dialog>
 <rh-button id="trigger">Open Dialog</rh-button>
 <output></output>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-button id="first-modal-trigger">Open</rh-button>
 <rh-dialog trigger="first-modal-trigger">
   <h2 slot="header">Modal dialog with a header</h2>
@@ -93,10 +100,12 @@ lightdom:
     anim id est laborum.</p>
   <rh-cta slot="footer" href="#bar">Call to Action</rh-cta>
 </rh-dialog>
+{{< /raw >}}
 
 
 ### lots of content
 
+{{< raw >}}
 <p>Scroll down to find the dialog's trigger.</p>
 <p>Praesent commodo cursus magna, vel scelerisque nisl consectetur et. Donec sed odio dui. Sed posuere
   consectetur est at lobortis. Donec sed odio dui. Donec ullamcorper nulla non metus auctor fringilla.</p>
@@ -268,10 +277,12 @@ lightdom:
 <p>Duis mollis, est non commodo luctus, nisi erat porttitor ligula, eget lacinia odio sem nec elit. Donec sed
   odio dui. Maecenas faucibus mollis interdum. Fusce dapibus, tellus ac cursus commodo, tortor mauris
   condimentum nibh, ut fermentum massa justo sit amet risus.</p>
+{{< /raw >}}
 
 
 ### no header content
 
+{{< raw >}}
 <rh-button id="no-header-content-trigger">Open</rh-button>
 <rh-dialog trigger="no-header-content-trigger">
   <h2>This dialog has no slotted header content</h2>
@@ -283,10 +294,12 @@ lightdom:
     laborum.</p>
   <rh-cta slot="footer" href="#bar">Call to Action</rh-cta>
 </rh-dialog>
+{{< /raw >}}
 
 
 ### no headings
 
+{{< raw >}}
 <rh-button id="no-headings-trigger">Open</rh-button>
 <rh-dialog accessible-label="This dialog's accessible name" trigger="no-headings-trigger">
   <p>This dialog uses the <code>accessible-label</code> attribute to define its accessible name for assistive technology.
@@ -297,10 +310,12 @@ lightdom:
   </p>
   <rh-cta slot="footer" href="#">Call to Action</rh-cta>
 </rh-dialog>
+{{< /raw >}}
 
 
 ### video modal
 
+{{< raw >}}
 <rh-button id="video-modal-trigger">Open Video Dialog</rh-button>
 <rh-dialog id="video-modal"
            type="video"
@@ -315,4 +330,5 @@ lightdom:
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowfullscreen></iframe>
 </rh-dialog>
+{{< /raw >}}
 

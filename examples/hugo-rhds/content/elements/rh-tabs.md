@@ -13,6 +13,7 @@ lightdom:
 
 ### box inset
 
+{{< raw >}}
 <rh-tabs box="inset"
          id="inset">
   <rh-tab id="users"
@@ -28,10 +29,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### centered
 
+{{< raw >}}
 <rh-tabs centered>
   <rh-tab id="users"
           slot="tab"
@@ -46,10 +49,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <form>
     <fieldset>
@@ -121,10 +126,12 @@ lightdom:
     <rh-tab-panel>Cloud</rh-tab-panel>
   </rh-tabs>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### deprecation
 
+{{< raw >}}
 <rh-tabs theme="base">
   <rh-tab id="users"
           slot="tab"
@@ -152,10 +159,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### icons and text
 
+{{< raw >}}
 <rh-tabs>
   <rh-tab slot="tab"
           active> Users <rh-icon slot="icon"
@@ -174,10 +183,12 @@ lightdom:
   <rh-tab slot="tab"> No Icon </rh-tab>
   <rh-tab-panel>System</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-tabs>
   <rh-tab id="users"
           slot="tab"
@@ -192,10 +203,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### long tab content
 
+{{< raw >}}
 <rh-tabs>
   <rh-tab id="users"
           slot="tab"
@@ -223,10 +236,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### manual activation
 
+{{< raw >}}
 <rh-tabs manual>
   <rh-tab id="users" slot="tab">Users</rh-tab>
   <rh-tab-panel>Users</rh-tab-panel>
@@ -239,10 +254,12 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### nested
 
+{{< raw >}}
 <rh-tabs>
   <rh-tab id="users"
           slot="tab"
@@ -270,10 +287,12 @@ lightdom:
     </rh-tabs>
   </rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <section dir="rtl"
          lang="he"
          id="rtl">
@@ -368,10 +387,12 @@ lightdom:
     </rh-tab-panel>
   </rh-tabs>
 </section>
+{{< /raw >}}
 
 
 ### vertical
 
+{{< raw >}}
 <rh-tabs vertical>
   <rh-tab id="users"
           slot="tab"
@@ -386,4 +407,5 @@ lightdom:
   <rh-tab slot="tab">Cloud</rh-tab>
   <rh-tab-panel>Cloud</rh-tab-panel>
 </rh-tabs>
+{{< /raw >}}
 
