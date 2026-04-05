@@ -14,6 +14,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-context-picker id="picker" target="navigation" allow="darkest, lightest"></rh-context-picker>
   <rh-navigation-primary id="navigation">
@@ -146,10 +147,12 @@ lightdom:
   </rh-navigation-primary>
   <p>Mock Page content <a href="#">Link outside</a></p>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-navigation-primary role="navigation">
   <rh-navigation-primary-item variant="dropdown">
     <span slot="summary">AI</span>
@@ -473,10 +476,12 @@ lightdom:
 <div id="mock">
   <p>Mock Page content <a href="#">Link outside</a></p>
 </div>
+{{< /raw >}}
 
 
 ### links as top level
 
+{{< raw >}}
 <rh-navigation-primary role="navigation">
   <rh-navigation-primary-item>
     <a href="#ai">AI</a>
@@ -602,10 +607,12 @@ lightdom:
   </rh-navigation-primary-item>
 </rh-navigation-primary>
 <p>Mock Page content <a href="#">Link outside</a></p>
+{{< /raw >}}
 
 
 ### no secondary items
 
+{{< raw >}}
 <rh-navigation-primary role="navigation">
   <rh-navigation-primary-item variant="dropdown">
     <span slot="summary">AI</span>
@@ -808,10 +815,12 @@ lightdom:
 <div id="mock">
   <p>Mock Page content <a href="#">Link outside</a></p>
 </div>
+{{< /raw >}}
 
 
 ### not defined
 
+{{< raw >}}
 <rh-navigation-primary role="navigation">
   <rh-navigation-primary-item variant="dropdown">
     <span slot="summary">AI</span>
@@ -942,10 +951,12 @@ lightdom:
     </rh-navigation-primary-item>
 </rh-navigation-primary>
 <p>Mock Page content <a href="#">Link outside</a></p>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <div dir="rtl"
      lang="he">
   <rh-navigation-primary role="navigation">
@@ -1303,10 +1314,12 @@ lightdom:
     <p>תוכן עמוד מדומה <a href="#">קישור בתוכן העמוד</a></p>
   </div>
 </div>
+{{< /raw >}}
 
 
 ### translation
 
+{{< raw >}}
 <rh-navigation-primary role="navigation" mobile-toggle-label="Speisekarte" accessible-label="Hauptnavigation">
   <rh-navigation-primary-item variant="dropdown">
     <span slot="summary">KI</span>
@@ -1436,4 +1449,5 @@ lightdom:
   </rh-navigation-primary-item>
 </rh-navigation-primary>
 <p>Mock Page content <a href="#">Link outside</a></p>
+{{< /raw >}}
 

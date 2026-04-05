@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <ul class="demo">
     <li>
@@ -49,16 +50,20 @@ imports:
     </li>
   </ul>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-health-index grade="C"
                  size="lg">C</rh-health-index>
+{{< /raw >}}
 
 
 ### screen readers
 
+{{< raw >}}
 <section>
   <h2>&lt;rh-health-index> element</h2>
   <rh-health-index grade="A" size="sm">A</rh-health-index>
@@ -93,10 +98,12 @@ imports:
   <div role="meter" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Grade E" aria-label="Health graded A to F">E</div>
   <div role="meter" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-valuetext="Grade F" aria-label="Health graded A to F">F</div>
 </section>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <ul class="demo">
   <li>
     <h2>SM</h2>
@@ -135,4 +142,5 @@ imports:
     <rh-health-index grade="F" size="xl">F</rh-health-index>
   </li>
 </ul>
+{{< /raw >}}
 

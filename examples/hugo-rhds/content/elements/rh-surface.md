@@ -16,6 +16,7 @@ lightdom:
 
 ### color palettes
 
+{{< raw >}}
 <rh-surface id="surface" color-palette="darkest">
   <h2>Darkest</h2>
   <rh-cta><a href="#">Call to Action</a></rh-cta>
@@ -40,10 +41,12 @@ lightdom:
   <h2>Lightest</h2>
   <rh-cta><a href="#">Call to Action</a></rh-cta>
 </rh-surface>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-surface id="surface" color-palette="darkest">
   <rh-blockquote align="inline-start" size="default">
     <p>Surface is used to provide a theme to children</p>
@@ -51,10 +54,12 @@ lightdom:
   <rh-spinner size="lg">Loading...</rh-spinner>
   <rh-tag color="green">Sold</rh-tag>
 </rh-surface>
+{{< /raw >}}
 
 
 ### nested combination elements
 
+{{< raw >}}
 <rh-surface color-palette="darkest">
   <rh-card>
     <p>The card has no color-palette. It's nested CTA should therefore inherit
@@ -69,4 +74,5 @@ lightdom:
     <rh-cta href="#">Should be on dark</rh-cta>
   </rh-card>
 </rh-surface>
+{{< /raw >}}
 

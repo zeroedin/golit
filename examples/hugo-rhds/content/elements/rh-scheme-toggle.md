@@ -9,5 +9,7 @@ imports:
 
 ### index
 
+{{< raw >}}
 <rh-scheme-toggle></rh-scheme-toggle>
+{{< /raw >}}
 

@@ -9,11 +9,14 @@ imports:
 
 ### always visible
 
+{{< raw >}}
 <rh-back-to-top visible="always" href="#top">Back to top</rh-back-to-top>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <div id="overflow">
     <a id="top" href="#bottom">Go to bottom</a>
@@ -22,32 +25,39 @@ imports:
   <div>
   <rh-back-to-top href="#top">Back to top</rh-back-to-top>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <div id="overflow">
   <p>Scroll down to reveal the back to top element</p>
   <rh-back-to-top href="#">Back to top</rh-back-to-top>
 </div>
+{{< /raw >}}
 
 
 ### no slotted text
 
+{{< raw >}}
 <div id="overflow">
   <a id="top" href="#bottom">Go to bottom</a>
   <p>Scroll down or press tab to see the back to top button</p>
   <a id="bottom" href="#top">Go to top</a>
   <rh-back-to-top href="#top" label="Return to top"></rh-back-to-top>
 </div>
+{{< /raw >}}
 
 
 ### scroll distance
 
+{{< raw >}}
 <div id="overflow">
   <a id="top" href="#bottom">Go to bottom</a>
   <p>Scroll down (50px) or press tab to see the back to top button</p>
   <a id="bottom" href="#top">Go to top</a>
   <rh-back-to-top scroll-distance="50" href="#top">Back to top</rh-back-to-top>
 </div>
+{{< /raw >}}
 

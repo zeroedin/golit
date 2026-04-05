@@ -45,6 +45,11 @@
   {{ block "imports" . }}{{ end }}
 
   <link rel="stylesheet" href="https://static.redhat.com/libs/redhat/redhat-font/4/webfonts/red-hat-font.min.css">
+  <link rel="stylesheet" href="/rhds/css/rh-navigation-primary-lightdom.css">
+  <script type="module">
+    import '@lit-labs/ssr-client/lit-element-hydrate-support.js';
+    import '@rhds/elements/rh-navigation-primary/rh-navigation-primary.js';
+  </script>
   <style>
 /**
  * Do not edit directly, this file was auto-generated.
@@ -1115,12 +1120,11 @@ body {
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Home</a> |
-    {{ range (where .Site.RegularPages "Section" "elements") }}
-    <a href="{{ .RelPermalink }}">{{ .Title }}</a>
-    {{ end }}
-  </nav>
+  <rh-navigation-primary>
+    <rh-navigation-primary-item>
+      <a href="/elements/">Elements</a>
+    </rh-navigation-primary-item>
+  </rh-navigation-primary>
   {{ block "main" . }}{{ .Content }}{{ end }}
 </body>
 </html>

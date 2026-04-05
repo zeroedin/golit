@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-context-picker id="picker" target="navigation" allow="darkest, lightest"></rh-context-picker>
   <rh-progress-stepper>
@@ -39,10 +40,12 @@ imports:
     </rh-progress-step>
   </rh-progress-stepper>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### compact horizontal
 
+{{< raw >}}
 <rh-progress-stepper compact>
   <rh-progress-step
       state="complete"
@@ -68,10 +71,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### compact vertical
 
+{{< raw >}}
 <rh-progress-stepper compact orientation="vertical">
   <rh-progress-step
       state="complete"
@@ -99,10 +104,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### custom icon
 
+{{< raw >}}
 <rh-progress-stepper>
   <rh-progress-step
       state="complete"
@@ -129,10 +136,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-progress-stepper>
   <rh-progress-step state="complete"
                     description="This step has been completed successfully">
@@ -154,10 +163,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### linked steps
 
+{{< raw >}}
 <rh-progress-stepper>
   <rh-progress-step state="complete"
                     href="#"
@@ -184,10 +195,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### rich descriptions
 
+{{< raw >}}
 <rh-progress-stepper>
   <rh-progress-step state="complete">
     Complete Step
@@ -220,10 +233,12 @@ imports:
     </span>
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### vertical at
 
+{{< raw >}}
 <rh-progress-stepper vertical-at="sm">
   <rh-progress-step state="complete"
                     description="This step has been completed successfully">
@@ -245,10 +260,12 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 
 
 ### vertical stepper
 
+{{< raw >}}
 <rh-progress-stepper orientation="vertical">
   <rh-progress-step state="complete"
                     description="This step has been completed successfully">
@@ -270,4 +287,5 @@ imports:
     Inactive Step
   </rh-progress-step>
 </rh-progress-stepper>
+{{< /raw >}}
 

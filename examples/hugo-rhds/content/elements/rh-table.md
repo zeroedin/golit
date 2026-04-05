@@ -11,6 +11,7 @@ lightdom:
 
 ### auto data labels
 
+{{< raw >}}
 <h2>Basic table</h2>
 <rh-table>
   <table>
@@ -149,10 +150,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-table>
     <table>
@@ -190,10 +193,12 @@ lightdom:
     <small slot="summary">Dates and venues subject to change.</small>
   </rh-table>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### column headers
 
+{{< raw >}}
 <p>
   <strong>Note: </strong> Tables with no <code>thead</code> will not stack on mobile.
 </p>
@@ -221,10 +226,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### headers and summary but no title
 
+{{< raw >}}
 <rh-table>
   <table>
     <col>
@@ -258,10 +265,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### horizontal overflow
 
+{{< raw >}}
 <rh-table style="width:500px">
   <table>
     <tbody>
@@ -331,10 +340,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-table>
   <table>
     <caption>
@@ -374,10 +385,12 @@ lightdom:
   </table>
   <small slot="summary">Dates and venues subject to change.</small>
 </rh-table>
+{{< /raw >}}
 
 
 ### no title headers or summary
 
+{{< raw >}}
 <rh-table>
   <table>
     <col>
@@ -404,10 +417,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### row and column headers
 
+{{< raw >}}
 <rh-table>
   <table>
     <caption>Delivery slots:</caption>
@@ -463,10 +478,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### row headers
 
+{{< raw >}}
 <rh-table>
   <table>
     <col>
@@ -500,10 +517,12 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 
 
 ### title and summary but no headers
 
+{{< raw >}}
 <rh-table>
   <table>
     <caption>Concerts</caption>
@@ -532,10 +551,12 @@ lightdom:
   </table>
   <small slot="summary">Dates and venues subject to change. Anything longer should wrap.</small>
 </rh-table>
+{{< /raw >}}
 
 
 ### title headers and summary
 
+{{< raw >}}
 <rh-table>
   <table>
     <caption>Concerts</caption>
@@ -575,10 +596,12 @@ lightdom:
   </table>
   <small slot="summary">Dates and venues subject to change.</small>
 </rh-table>
+{{< /raw >}}
 
 
 ### vertical overflow
 
+{{< raw >}}
 <rh-table style="height:500px">
   <table>
     <tbody>
@@ -675,4 +698,5 @@ lightdom:
     </tbody>
   </table>
 </rh-table>
+{{< /raw >}}
 

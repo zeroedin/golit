@@ -10,6 +10,7 @@ imports:
 
 ### alternate
 
+{{< raw >}}
 <section id="alert-variant-alternate">
   <rh-alert variant="alternate">
     <h3 slot="header">Neutral</h3>
@@ -54,10 +55,12 @@ imports:
     <rh-button slot="actions" variant="link" data-action="dismiss">Cancel</rh-button>
   </rh-alert>
 </section>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <section id="alert-context">
     <rh-alert>
@@ -76,10 +79,12 @@ imports:
     </rh-alert>
   </section>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### deprecated states
 
+{{< raw >}}
 <section id="alert-states">
   <rh-alert state="error">
     <h3 slot="header">Error - alias of Danger</h3>
@@ -103,10 +108,12 @@ imports:
     <rh-button slot="actions" variant="link" data-action="confirm">Confirm</rh-button>
   </rh-alert>
 </section>
+{{< /raw >}}
 
 
 ### dismissable
 
+{{< raw >}}
 <section id="alert-dismissable">
   <rh-alert dismissable>
     <h3 slot="header">Default dismissable</h3>
@@ -137,10 +144,12 @@ imports:
     <rh-button slot="actions" variant="link" data-action="dismiss">Cancel</rh-button>
   </rh-alert>
 </section>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-alert>
   <h3 slot="header">Default</h3>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam eleifend elit sed est
@@ -148,10 +157,12 @@ imports:
   <rh-button slot="actions" variant="secondary" data-action="confirm">Confirm</rh-button>
   <rh-button slot="actions" variant="link" data-action="dismiss">Cancel</rh-button>
 </rh-alert>
+{{< /raw >}}
 
 
 ### inline
 
+{{< raw >}}
 <section id="alert-variant-inline">
   <rh-alert variant="inline">
     <h3 slot="header">Default</h3>
@@ -189,10 +200,12 @@ imports:
     <rh-button slot="actions" variant="link" data-action="dismiss">Cancel</rh-button>
   </rh-alert>
 </section>
+{{< /raw >}}
 
 
 ### states
 
+{{< raw >}}
 <section id="alert-states">
   <rh-alert state="danger">
     <h3 slot="header">Danger</h3>
@@ -237,10 +250,12 @@ imports:
     <rh-button slot="actions" variant="link" data-action="dismiss">Cancel</rh-button>
   </rh-alert>
 </section>
+{{< /raw >}}
 
 
 ### toast
 
+{{< raw >}}
 <form id="alert-variant-toast">
   <fieldset>
     <legend>Alert State</legend>
@@ -263,4 +278,5 @@ imports:
   </fieldset>
   <rh-button>Toast alert</rh-button>
 </form>
+{{< /raw >}}
 

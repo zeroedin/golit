@@ -11,6 +11,7 @@ imports:
 
 ### bottom
 
+{{< raw >}}
 <div class="tooltip-container">
   <rh-tooltip position="bottom">
     <rh-button>Bottom Tooltip</rh-button>
@@ -18,10 +19,12 @@ imports:
       labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.</span>
   </rh-tooltip>
 </div>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-tooltip>
     <rh-button>Tooltip</rh-button>
@@ -29,37 +32,45 @@ imports:
       labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.</span>
   </rh-tooltip>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### content attributes
 
+{{< raw >}}
 <rh-tooltip content="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
     labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.">
   <rh-button>Tooltip</rh-button>
 </rh-tooltip>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-tooltip>
   <rh-button>Tooltip</rh-button>
   <span slot="content">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut
     labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.</span>
 </rh-tooltip>
+{{< /raw >}}
 
 
 ### left
 
+{{< raw >}}
 <div class="tooltip-container">
   <rh-tooltip position="left">
     <rh-button>Left Tooltip</rh-button>
     <span slot="content">Some tooltip content</span>
   </rh-tooltip>
 </div>
+{{< /raw >}}
 
 
 ### right
 
+{{< raw >}}
 <div class="tooltip-container">
 <rh-tooltip position="right">
   <rh-button>Right Tooltip</rh-button>
@@ -67,10 +78,12 @@ imports:
       labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.</span>
   </rh-tooltip>
 </div>
+{{< /raw >}}
 
 
 ### rtl
 
+{{< raw >}}
 <div class="tooltip-container" dir="rtl" lang="he">
   <rh-tooltip position="right">
     <rh-button>עם ישראל חי</rh-button>
@@ -85,10 +98,12 @@ imports:
   לְאַחַר שֶׁהֻגְלָה הָעָם מֵאַרְצוֹ בְּכֹחַ הַזְּרוֹעַ שָׁמַר לָהּ אֱמוּנִים בְּכָל אַרְצוֹת פְּזוּרָיו, וְלֹא חָדַל מִתְּפִלָּה וּמִתִּקְוָה לָשׁוּב לְאַרְצוֹ וּלְחַדֵּשׁ בְּתוֹכָהּ אֶת חֵרוּתוֹ הַמְּדִינִית. </span>
   </rh-tooltip>
 </div>
+{{< /raw >}}
 
 
 ### silent
 
+{{< raw >}}
 <p>Adding the <code>silent</code> attribute makes <code>&lt;rh-tooltip&gt;</code>&rsquo;s tooltip content inaccessible. Only use when providing another means of accessibility for content in the <code>content</code> slot.</p>
 <rh-tooltip silent>
   <rh-button variant="secondary">
@@ -96,10 +111,12 @@ imports:
   </rh-button>
   <span slot="content">Copy to Clipboard</span>
 </rh-tooltip>
+{{< /raw >}}
 
 
 ### top
 
+{{< raw >}}
 <div class="tooltip-container">
   <rh-tooltip position="top">
     <rh-button>Top Tooltip</rh-button>
@@ -107,4 +124,5 @@ imports:
       labore et dolore magna aliqua. Mi eget mauris pharetra et ultrices.</span>
   </rh-tooltip>
 </div>
+{{< /raw >}}
 

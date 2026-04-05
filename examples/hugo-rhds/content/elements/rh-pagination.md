@@ -12,6 +12,7 @@ lightdom:
 
 ### aria current
 
+{{< raw >}}
 <rh-pagination>
   <ol>
     <li><a href="#1">1</a></li>
@@ -21,10 +22,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-pagination>
     <ol>
@@ -54,10 +57,12 @@ lightdom:
     </ol>
   </rh-pagination>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### compact
 
+{{< raw >}}
 <rh-pagination id="constrain">
   <ol>
     <li><a href="#">1</a></li>
@@ -67,10 +72,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-pagination>
   <ol>
     <li><a href="?page=1">1</a></li>
@@ -80,10 +87,12 @@ lightdom:
     <li><a href="?page=5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### many pages
 
+{{< raw >}}
 <rh-pagination>
   <ol>
     <li><a href="#">1</a></li>
@@ -109,10 +118,12 @@ lightdom:
   </ol>
 </rh-pagination>
 <p>Paginators with many pages must overflow.</p>
+{{< /raw >}}
 
 
 ### no numeric control
 
+{{< raw >}}
 <rh-pagination>
   <ol>
     <li><a href="#">1</a></li>
@@ -122,10 +133,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### open compact size
 
+{{< raw >}}
 <rh-pagination id="constrain" variant="open" size="sm">
   <ol>
     <li><a href="#">1</a></li>
@@ -135,10 +148,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### open compact
 
+{{< raw >}}
 <rh-pagination id="constrain" variant="open">
   <ol>
     <li><a href="#">1</a></li>
@@ -148,10 +163,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### open
 
+{{< raw >}}
 <rh-pagination variant="open">
   <ol>
     <li><a href="#">1</a></li>
@@ -161,10 +178,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### overflow
 
+{{< raw >}}
 <rh-pagination>
   <ol>
     <li><a href="#">1</a></li>
@@ -194,10 +213,12 @@ lightdom:
   <rh-button id="add">Add Page</rh-button>
   <rh-button id="remove" danger>Remove Page</rh-button>
 </fieldset>
+{{< /raw >}}
 
 
 ### right to left
 
+{{< raw >}}
 <p>צריך להיראות יותר טוב</p>
 <rh-pagination id="rtl-pagination" dir="rtl">
   <span slot="go-to-page">עבור לדף</span>
@@ -209,10 +230,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### size compact
 
+{{< raw >}}
 <rh-pagination id="constrain" size="sm">
   <ol>
     <li><a href="#">1</a></li>
@@ -222,10 +245,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### size
 
+{{< raw >}}
 <rh-pagination size="sm">
   <ol>
     <li><a href="#">1</a></li>
@@ -235,10 +260,12 @@ lightdom:
     <li><a href="#5">5</a></li>
   </ol>
 </rh-pagination>
+{{< /raw >}}
 
 
 ### vue
 
+{{< raw >}}
 <div id="app">
   <rh-pagination>
     <ol>
@@ -249,4 +276,5 @@ lightdom:
   </rh-pagination>
   <span v-text="message"></span> <span v-text="currentPage"></span>
 </div>
+{{< /raw >}}
 

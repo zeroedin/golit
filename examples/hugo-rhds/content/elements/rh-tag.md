@@ -9,6 +9,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <dl>
     <dt>Filled</dt>
@@ -452,10 +453,12 @@ imports:
     </svg>
   </defs>
 </svg>
+{{< /raw >}}
 
 
 ### colors
 
+{{< raw >}}
 <rh-tag color="red">Red</rh-tag>
 <rh-tag color="orange">Orange</rh-tag>
 <rh-tag color="green">Green</rh-tag>
@@ -463,10 +466,12 @@ imports:
 <rh-tag color="blue">Blue</rh-tag>
 <rh-tag color="purple">Purple</rh-tag>
 <rh-tag>Gray</rh-tag>
+{{< /raw >}}
 
 
 ### desaturated with icon
 
+{{< raw >}}
 <rh-tag variant="desaturated" icon="information-fill" color="red"    >Red</rh-tag>
 <rh-tag variant="desaturated" icon="information-fill" color="orange" >Orange</rh-tag>
 <rh-tag variant="desaturated" icon="information-fill" color="green"  >Green</rh-tag>
@@ -474,10 +479,12 @@ imports:
 <rh-tag variant="desaturated" icon="information-fill" color="blue"   >Blue</rh-tag>
 <rh-tag variant="desaturated" icon="information-fill" color="purple" >Purple</rh-tag>
 <rh-tag variant="desaturated" icon="information-fill" color="gray"   >Gray</rh-tag>
+{{< /raw >}}
 
 
 ### desaturated
 
+{{< raw >}}
 <rh-tag variant="desaturated" color="red">Red</rh-tag>
 <rh-tag variant="desaturated" color="orange">Orange</rh-tag>
 <rh-tag variant="desaturated" color="green">Green</rh-tag>
@@ -485,10 +492,12 @@ imports:
 <rh-tag variant="desaturated" color="blue">Blue</rh-tag>
 <rh-tag variant="desaturated" color="purple">Purple</rh-tag>
 <rh-tag variant="desaturated" color="gray">Gray</rh-tag>
+{{< /raw >}}
 
 
 ### filled color with icon
 
+{{< raw >}}
 <rh-tag icon="information-fill" color="red">Red</rh-tag>
 <rh-tag icon="information-fill" color="red-orange">Red Orange</rh-tag>
 <rh-tag icon="information-fill" color="orange">Orange</rh-tag>
@@ -498,10 +507,12 @@ imports:
 <rh-tag icon="information-fill" color="blue">Blue</rh-tag>
 <rh-tag icon="information-fill" color="purple">Purple</rh-tag>
 <rh-tag icon="information-fill" color="gray">Gray</rh-tag>
+{{< /raw >}}
 
 
 ### filled color with slotted icon
 
+{{< raw >}}
 <rh-tag color="red">Red<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
 <rh-tag color="red-orange">Red Orange<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
 <rh-tag color="orange">Orange<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
@@ -521,10 +532,12 @@ imports:
     </svg>
   </defs>
 </svg>
+{{< /raw >}}
 
 
 ### filled color
 
+{{< raw >}}
 <rh-tag color="red">Red</rh-tag>
 <rh-tag color="red-orange">Red Orange</rh-tag>
 <rh-tag color="orange">Orange</rh-tag>
@@ -534,15 +547,19 @@ imports:
 <rh-tag color="blue">Blue</rh-tag>
 <rh-tag color="purple">Purple</rh-tag>
 <rh-tag color="gray">Gray</rh-tag>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-tag>Tag</rh-tag>
+{{< /raw >}}
 
 
 ### links
 
+{{< raw >}}
 <dl>
   <dt>Filled with link</dt>
   <dd>
@@ -593,10 +610,12 @@ imports:
     <rh-tag href="#" disabled color="gray"       icon="information-fill">Gray</rh-tag>
   </dd>
 </dl>
+{{< /raw >}}
 
 
 ### outline with icon
 
+{{< raw >}}
 <rh-tag variant="outline" icon="information-fill" color="red"    >Red</rh-tag>
 <rh-tag variant="outline" icon="information-fill" color="orange" >Orange</rh-tag>
 <rh-tag variant="outline" icon="information-fill" color="green"  >Green</rh-tag>
@@ -604,10 +623,12 @@ imports:
 <rh-tag variant="outline" icon="information-fill" color="blue"   >Blue</rh-tag>
 <rh-tag variant="outline" icon="information-fill" color="purple" >Purple</rh-tag>
 <rh-tag variant="outline" icon="information-fill" color="gray"   >Gray</rh-tag>
+{{< /raw >}}
 
 
 ### outline with slotted icon
 
+{{< raw >}}
 <rh-tag variant="outline" color="red">Red<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
 <rh-tag variant="outline" color="red-orange">Red Orange<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
 <rh-tag variant="outline" color="orange">Orange<svg slot="icon"><use href="#slotted-icon"/></svg></rh-tag>
@@ -626,10 +647,12 @@ imports:
     </svg>
   </defs>
 </svg>
+{{< /raw >}}
 
 
 ### outline
 
+{{< raw >}}
 <rh-tag variant="outline" color="red">Red</rh-tag>
 <rh-tag variant="outline" color="orange">Orange</rh-tag>
 <rh-tag variant="outline" color="green">Green</rh-tag>
@@ -637,4 +660,5 @@ imports:
 <rh-tag variant="outline" color="blue">Blue</rh-tag>
 <rh-tag variant="outline" color="purple">Purple</rh-tag>
 <rh-tag variant="outline" color="gray">Gray</rh-tag>
+{{< /raw >}}
 

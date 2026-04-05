@@ -13,6 +13,7 @@ lightdom:
 
 ### footer universal
 
+{{< raw >}}
 <rh-footer-universal>
   <h3 slot="links-primary" data-analytics-text="Red Hat legal and privacy links" hidden>Red Hat legal and privacy links</h3>
   <ul slot="links-primary" data-analytics-region="page-footer-bottom-primary">
@@ -37,10 +38,12 @@ lightdom:
     <!-- <li><span id="teconsent"> </span></li> -->
   </ul>
 </rh-footer-universal>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-footer data-analytics-region="page-footer">
   <a slot="logo" href="https://redhat.com/en" data-analytics-category="Footer" data-analytics-text="Logo">
     <img alt="Red Hat logo" src="https://static.redhat.com/libs/redhat/brand-assets/2/corp/logo--on-dark.svg" loading="lazy" />
@@ -141,10 +144,12 @@ lightdom:
     </ul>
   </rh-footer-universal>
 </rh-footer>
+{{< /raw >}}
 
 
 ### slotted social links
 
+{{< raw >}}
 <rh-footer data-analytics-region="page-footer">
   <a slot="logo" href="https://redhat.com/en" data-analytics-category="Footer" data-analytics-text="Logo">
     <img alt="Red Hat logo" src="https://static.redhat.com/libs/redhat/brand-assets/2/corp/logo--on-dark.svg" loading="lazy" />
@@ -221,4 +226,5 @@ lightdom:
     </ul>
   </rh-footer-universal>
 </rh-footer>
+{{< /raw >}}
 

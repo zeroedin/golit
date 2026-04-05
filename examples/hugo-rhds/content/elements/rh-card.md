@@ -14,6 +14,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-card>
     <h2 slot="header">Default card, slotted content and footer</h2>
@@ -75,10 +76,12 @@ lightdom:
     </rh-cta>
   </rh-card>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### grid
 
+{{< raw >}}
 <div id="card-grid">
   <rh-card>
     <h2 slot="header">Grid Card</h2>
@@ -133,10 +136,12 @@ lightdom:
     </rh-cta>
   </rh-card>
 </div>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-card>
   <h2 slot="header">Card</h2>
   <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.
@@ -147,10 +152,12 @@ lightdom:
     <a href="#">Call to action</a>
   </rh-cta>
 </rh-card>
+{{< /raw >}}
 
 
 ### promo full width
 
+{{< raw >}}
 <div id="full-width">
   <rh-card variant="promo" full-width>
     <svg slot="image"
@@ -210,10 +217,12 @@ lightdom:
     <rh-cta slot="footer" href="#">Call to action</rh-cta>
   </rh-card>
 </div>
+{{< /raw >}}
 
 
 ### promo narrow
 
+{{< raw >}}
 <section id="narrow">
   <rh-card variant="promo">
     <svg slot="image"
@@ -246,10 +255,12 @@ lightdom:
     <p>A &rdquo;standard&ldquo; Promo with a <code>color-palette</code> attribute added to the <code>&lt;rh-card&gt;</code> tag.</p>
   </rh-card>
 </section>
+{{< /raw >}}
 
 
 ### promo standard
 
+{{< raw >}}
 <section id="standard">
   <rh-card variant="promo" color-palette="lighter">
     <p>The &rdquo;standard&ldquo; Promo. It has a paragraph in the default slot and a CTA in the footer slot.</p>
@@ -260,10 +271,12 @@ lightdom:
     <rh-cta slot="footer" href="#">Call to action</rh-cta>
   </rh-card>
 </section>
+{{< /raw >}}
 
 
 ### promo
 
+{{< raw >}}
 <rh-card variant="promo">
   <svg slot="image"
        width="1920"
@@ -326,10 +339,12 @@ lightdom:
   <p>Promos can have a darkest color palette too. You can add the <code>color-palette</code> attribute or wrap them with <code>rh-surface</code>.</p>
   <rh-cta slot="footer" href="#">Call to action</rh-cta>
 </rh-card>
+{{< /raw >}}
 
 
 ### sticky pattern
 
+{{< raw >}}
 <section id="card-pattern-sticky">
   <rh-card>
     <rh-button slot="header" variant="close">Close</rh-button>
@@ -350,10 +365,12 @@ lightdom:
     <rh-cta slot="footer"><a href="#">Call to action</a></rh-cta>
   </rh-card>
 </section>
+{{< /raw >}}
 
 
 ### title pattern
 
+{{< raw >}}
 <section id="card-pattern-title">
   <rh-card>
     <h2 slot="header">Title, lg</h2>
@@ -386,10 +403,12 @@ lightdom:
     <rh-cta><a href="#">Call to action</a></rh-cta>
   </rh-card>
 </section>
+{{< /raw >}}
 
 
 ### variants
 
+{{< raw >}}
 <section id="card-patterns">
   <rh-card>
     <h2 slot="header">Default card, slotted content and footer</h2>
@@ -508,10 +527,12 @@ lightdom:
     </rh-cta>
   </rh-card>
 </section>
+{{< /raw >}}
 
 
 ### video pattern
 
+{{< raw >}}
 <section id="card-pattern-quote">
   <rh-card>
     <rh-video slot="image"></rh-video>
@@ -556,4 +577,5 @@ lightdom:
     </rh-blockquote>
   </rh-card>
 </section>
+{{< /raw >}}
 

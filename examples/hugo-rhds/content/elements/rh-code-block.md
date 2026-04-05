@@ -13,6 +13,7 @@ lightdom:
 
 ### Default (index)
 
+{{< raw >}}
 ```html
 <!DOCTYPE html>
 <title>Title</title>
@@ -22,9 +23,11 @@ lightdom:
   <!-- here goes the rest of the page -->
 </body>
 ```
+{{< /raw >}}
 
 ### Actions
 
+{{< raw >}}
 ```css
 #content {
   display: block;
@@ -41,9 +44,11 @@ lightdom:
   overflow-y: auto;
 }
 ```
+{{< /raw >}}
 
 ### Actions i18n
 
+{{< raw >}}
 {{< raw >}}
 <rh-code-block actions="wrap copy">
   <span slot="action-label-copy">העתק</span>
@@ -62,18 +67,22 @@ lightdom:
 }</script>
 </rh-code-block>
 {{< /raw >}}
+{{< /raw >}}
 
 ### Callout badges
 
+{{< raw >}}
 {{< raw >}}
 <rh-code-block>
   <script type="text/html"><p>Script tags in HTML must be escaped</p></script>
   <rh-badge state="info">1</rh-badge>
 </rh-code-block>
 {{< /raw >}}
+{{< /raw >}}
 
 ### Hide line numbers
 
+{{< raw >}}
 {{< raw >}}
 <rh-code-block line-numbers="hidden">
   <script type="text/html"><!DOCTYPE html>
@@ -84,9 +93,11 @@ lightdom:
 </body></script>
 </rh-code-block>
 {{< /raw >}}
+{{< /raw >}}
 
 ### Client-side highlighting (HTML)
 
+{{< raw >}}
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -108,9 +119,11 @@ lightdom:
   </body>
 </html>
 ```
+{{< /raw >}}
 
 ### Client-side highlighting (CSS)
 
+{{< raw >}}
 ```css
 rh-card.avatar-card {
   width: 360px;
@@ -128,9 +141,11 @@ rh-card.avatar-card {
   }
 }
 ```
+{{< /raw >}}
 
 ### Client-side highlighting (YAML)
 
+{{< raw >}}
 ```yaml
 extends:
   - stylelint-config-standard
@@ -145,9 +160,11 @@ rules:
     - allowed:
       - --rh-icon-size
 ```
+{{< /raw >}}
 
 ### Client-side highlighting (JavaScript)
 
+{{< raw >}}
 ```javascript
 import '@rhds/elements/rh-card/rh-card.js';
 
@@ -156,23 +173,29 @@ card.addEventListener('click', () => {
   console.log('Card clicked!');
 });
 ```
+{{< /raw >}}
 
 ### Resizable
 
+{{< raw >}}
 {{< raw >}}
 <rh-code-block resizable>
   <script type="text/text">Error: Error creating network Load Balancer: AccessDenied: User: arn:aws:sts::970xxxxxxxxx:assumed-role/ManagedOpenShift-Installer-Role/163xxxxxxxxxxxxxxxx is not authorized to perform: iam:CreateServiceLinkedRole on resource: arn:aws:iam::970xxxxxxxxx:role/aws-service-role/elasticloadbalancing.amazonaws.com/AWSServiceRoleForElasticLoadBalancing</script>
 </rh-code-block>
 {{< /raw >}}
+{{< /raw >}}
 
 ### Sizes — Standard
 
+{{< raw >}}
 ```text
 oc apply -f ostoy-microservice-deployment.yaml
 ```
+{{< /raw >}}
 
 ### Sizes — Multi-line
 
+{{< raw >}}
 ```bash
 $ podman login -u flozanorht quay.io
 Password:
@@ -183,9 +206,11 @@ docker://quay.io/flozanorht/ubi:8
 Writing manifest to image destination
 Storing signatures
 ```
+{{< /raw >}}
 
 ### Below the fold
 
+{{< raw >}}
 {{< raw >}}
 <section style="height: 100vh; display: flex; align-items: center; justify-content: center;">
   <p><strong>Scroll down to view code block</strong></p>
@@ -201,18 +226,22 @@ Storing signatures
   <!-- here goes the rest of the page -->
 </body>
 ```
+{{< /raw >}}
 
 ### Bash example
 
+{{< raw >}}
 ```bash
 for node in $(oc get nodes -o jsonpath='{.items[*].metadata.name}'); do
   echo ${node}
   oc adm cordon ${node}
 done
 ```
+{{< /raw >}}
 
 ### JSON example
 
+{{< raw >}}
 ```json
 {
   "apiVersion": "v1",
@@ -226,9 +255,11 @@ done
   }
 }
 ```
+{{< /raw >}}
 
 ### TypeScript example
 
+{{< raw >}}
 ```typescript
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
@@ -244,9 +275,11 @@ export class MyElement extends LitElement {
   }
 }
 ```
+{{< /raw >}}
 
 ### Ruby example
 
+{{< raw >}}
 ```ruby
 require 'sinatra'
 
@@ -259,3 +292,4 @@ post '/deploy' do
   { status: 'deployed', timestamp: Time.now }.to_json
 end
 ```
+{{< /raw >}}

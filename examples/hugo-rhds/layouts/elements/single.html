@@ -1,6 +1,13 @@
 {{ define "imports" }}
-  {{ range .Params.lightdom }}
-  <link rel="stylesheet" href="/rhds/css/{{ . }}">
+  {{ range .Params.imports }}
+    {{ $ld := printf "static/rhds/css/%s-lightdom.css" . }}
+    {{ $shim := printf "static/rhds/css/%s-lightdom-shim.css" . }}
+    {{ if fileExists $ld }}
+  <link rel="stylesheet" href="/rhds/css/{{ . }}-lightdom.css">
+    {{ end }}
+    {{ if fileExists $shim }}
+  <link rel="stylesheet" href="/rhds/css/{{ . }}-lightdom-shim.css">
+    {{ end }}
   {{ end }}
   <script type="module">
     import '@lit-labs/ssr-client/lit-element-hydrate-support.js';

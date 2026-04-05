@@ -13,6 +13,7 @@ lightdom:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-navigation-vertical bordered="inline-start">
     <rh-navigation-link href="#manage-applications" current-page>Manage applications</rh-navigation-link>
@@ -52,10 +53,12 @@ lightdom:
     <rh-navigation-link href="#legal-notice">Legal Notice</rh-navigation-link>
   </rh-navigation-vertical>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### contained
 
+{{< raw >}}
 <div id="container">
   <rh-navigation-vertical>
     <rh-navigation-link href="#" current-page>Home</rh-navigation-link>
@@ -173,10 +176,12 @@ lightdom:
     <rh-navigation-link href="#get-support">Get Support</rh-navigation-link>
   </rh-navigation-vertical>
 </div>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-navigation-vertical>
   <rh-navigation-link href="#" current-page>Home</rh-navigation-link>
   <rh-navigation-vertical-list summary="About">
@@ -292,10 +297,12 @@ lightdom:
   <rh-navigation-link href="#release-notes">Release Notes</rh-navigation-link>
   <rh-navigation-link href="#get-support">Get Support</rh-navigation-link>
 </rh-navigation-vertical>
+{{< /raw >}}
 
 
 ### nested
 
+{{< raw >}}
 <rh-navigation-vertical bordered="inline-start">
   <rh-navigation-link href="#manage-applications">Manage applications</rh-navigation-link>
   <rh-navigation-vertical-list highlight summary="1. Managing applications">
@@ -333,10 +340,12 @@ lightdom:
   </rh-navigation-vertical-list>
   <rh-navigation-link href="#legal-notice">Legal Notice</rh-navigation-link>
 </rh-navigation-vertical>
+{{< /raw >}}
 
 
 ### open
 
+{{< raw >}}
 <rh-navigation-vertical>
   <rh-navigation-link href="#">Home</rh-navigation-link>
   <rh-navigation-vertical-list summary="About">
@@ -452,10 +461,12 @@ lightdom:
   <rh-navigation-link href="#release-notes">Release Notes</rh-navigation-link>
   <rh-navigation-link href="#get-support">Get Support</rh-navigation-link>
 </rh-navigation-vertical>
+{{< /raw >}}
 
 
 ### slotted anchor links
 
+{{< raw >}}
 <rh-navigation-vertical>
   <rh-navigation-link>
     <a href="#" aria-current="page">Home</a>
@@ -482,10 +493,12 @@ lightdom:
     </rh-navigation-link>
   </rh-navigation-vertical-list>
 </rh-navigation-vertical>
+{{< /raw >}}
 
 
 ### slotted icons
 
+{{< raw >}}
 <rh-navigation-vertical>
   <rh-navigation-link href="#" current-page>
     <span><rh-icon set="ui" icon="home-fill"></rh-icon> Icon Example 1</span>
@@ -509,4 +522,5 @@ lightdom:
   </rh-navigation-link>
   </rh-navigation-vertical-list>
 </rh-navigation-vertical>
+{{< /raw >}}
 

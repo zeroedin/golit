@@ -10,17 +10,22 @@ imports:
 
 ### custom format
 
+{{< raw >}}
 <rh-timestamp id="timestamp-custom-format"
               date="Sat Jan 01 2022 00:00:00 GMT-0500"></rh-timestamp>
+{{< /raw >}}
 
 
 ### fallback
 
+{{< raw >}}
 <rh-timestamp date="Tue Aug 09 2006 14:57:00 GMT-0400">Tue Aug 09 2006 14:57:00 GMT-0400</rh-timestamp>
+{{< /raw >}}
 
 
 ### formats
 
+{{< raw >}}
 <rh-timestamp date-format="full"
               time-format="full"></rh-timestamp>
 <rh-timestamp date-format="full"></rh-timestamp>
@@ -30,25 +35,31 @@ imports:
               display-suffix="US Eastern"></rh-timestamp>
 <rh-timestamp date-format="full"
               locale="es"></rh-timestamp>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-timestamp date="Tue Aug 09 2006 14:57:00 GMT-0400"></rh-timestamp>
+{{< /raw >}}
 
 
 ### relative
 
+{{< raw >}}
 <rh-timestamp date="Tue Aug 09 2006 14:57:00 GMT-0400 (Eastern Daylight Time)" relative></rh-timestamp>
 <rh-timestamp date="Tue Aug 09 2006 14:57:00 GMT-0400 (Eastern Daylight Time)" locale="es" relative></rh-timestamp>
 <rh-timestamp date="Tue Aug 09 2022 14:57:00 GMT-0400 (Eastern Daylight Time)" relative></rh-timestamp>
 <rh-timestamp date="Tue Aug 09 2022 14:57:00 GMT-0400 (Eastern Daylight Time)" locale="es" relative></rh-timestamp>
 <rh-timestamp date="Tue Aug 09 2099 14:57:00 GMT-0400 (Eastern Daylight Time)" relative></rh-timestamp>
 <rh-timestamp date="Tue Aug 09 2099 14:57:00 GMT-0400 (Eastern Daylight Time)" locale="es" relative></rh-timestamp>
+{{< /raw >}}
 
 
 ### tooltip
 
+{{< raw >}}
 <section>
   <h2>Default tooltip</h2>
   <p>
@@ -94,4 +105,5 @@ imports:
     </rh-tooltip>
   </p>
 </section>
+{{< /raw >}}
 

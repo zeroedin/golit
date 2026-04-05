@@ -10,6 +10,7 @@ imports:
 
 ### color context
 
+{{< raw >}}
 <rh-context-demo>
   <rh-stat>
     <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
@@ -20,56 +21,69 @@ imports:
     <span>Description Placeholder</span>
   </rh-stat>
 </rh-context-demo>
+{{< /raw >}}
 
 
 ### icon slot
 
+{{< raw >}}
 <rh-stat>
   <rh-icon icon="code" slot="icon"></rh-icon>
   <span slot="statistic">Statistic Placeholder</span>
   <span>Description Placeholder</span>
 </rh-stat>
+{{< /raw >}}
 
 
 ### icon svg
 
+{{< raw >}}
 <rh-stat>
   <rh-icon slot="icon" icon="experimental"></rh-icon>
   <span slot="statistic">Statistic Placeholder</span>
   <span>Description Placeholder</span>
 </rh-stat>
+{{< /raw >}}
 
 
 ### icon
 
+{{< raw >}}
 <rh-stat icon="code">
   <span slot="statistic">Statistic Placeholder</span>
   <span>Description Placeholder</span>
 </rh-stat>
+{{< /raw >}}
 
 
 ### index
 
+{{< raw >}}
 <rh-stat>
   <span slot="statistic">Statistic Placeholder</span>
   <span>Description Placeholder</span>
 </rh-stat>
+{{< /raw >}}
 
 
 ### large
 
+{{< raw >}}
 <rh-stat size="large" icon="code">
   <span slot="statistic">Statistic Placeholder</span>
   <span>Description Placeholder</span>
 </rh-stat>
+{{< /raw >}}
 
 
 ### slotted content
 
+{{< raw >}}
 <rh-stat top="statistic">
   <rh-icon slot="icon" icon="code" set="ui"></rh-icon>
   <span slot="title">Overwrite Title</span>
   <p>Stat body that includes two lines and a footnote.</p>
   <span slot="statistic">Overwrite Statistic</span>
 </rh-stat>
+{{< /raw >}}
 
