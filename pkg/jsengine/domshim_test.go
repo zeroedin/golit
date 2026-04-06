@@ -1,6 +1,7 @@
 package jsengine
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/fastschema/qjs"
@@ -92,6 +93,34 @@ func TestDOMShim_MultipleLoadsPreserveRegistry(t *testing.T) {
 	}
 	if result.String() != "true" {
 		t.Error("first-el should still be registered after loading domshim a second time")
+	}
+}
+
+func TestDOMShim_BareLocationBinding(t *testing.T) {
+	rt, err := qjs.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+
+	ctx := rt.Context()
+	_, err = ctx.Eval("pre.js", qjs.Code(`globalThis.__golitLocationHref='http://localhost/';`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ctx.Eval("domshim.js", qjs.Code(domShimJS))
+	if err != nil {
+		t.Fatalf("loading DOM shim: %v", err)
+	}
+
+	result, err := ctx.Eval("test.js", qjs.Code(
+		`JSON.stringify({ gt: typeof globalThis.location, bare: typeof location })`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(result.String())
+	if strings.Contains(result.String(), `"bare":"undefined"`) {
+		t.Fatalf("bare location should resolve on global: %s", result.String())
 	}
 }
 

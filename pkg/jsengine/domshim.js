@@ -304,5 +304,188 @@ globalThis.__registerPreload = function(name, exports) {
   globalThis.__preloadedModules[name] = exports;
 };
 
+// --- SSR URL / location (align with @lit/ssr getWindow: stable base URL) ---
+// matchMedia is intentionally not shimmed (viewport-specific; no server semantics).
+
+(function () {
+  const base = typeof globalThis.__golitLocationHref === 'string'
+    ? globalThis.__golitLocationHref
+    : 'http://localhost/';
+  try {
+    globalThis.location ??= new URL(base);
+  } catch (_) {
+    globalThis.location ??= {
+      href: base,
+      origin: '',
+      protocol: 'http:',
+      host: 'localhost',
+      hostname: 'localhost',
+      port: '',
+      pathname: '/',
+      search: '',
+      hash: '',
+      assign() {},
+      replace() {},
+      reload() {},
+      toString() { return this.href; },
+    };
+  }
+})();
+
+globalThis.URLSearchParams ??= class URLSearchParams {
+  constructor(init) {
+    this._map = new Map();
+    if (init == null || init === '') return;
+    if (typeof init === 'string') {
+      let s = init.startsWith('?') ? init.slice(1) : init;
+      for (const pair of s.split('&')) {
+        if (!pair) continue;
+        const i = pair.indexOf('=');
+        const k = i >= 0 ? pair.slice(0, i) : pair;
+        const v = i >= 0 ? pair.slice(i + 1) : '';
+        try {
+          this._map.set(decodeURIComponent(k), decodeURIComponent(v));
+        } catch (_) {
+          this._map.set(k, v);
+        }
+      }
+    } else if (typeof init === 'object') {
+      for (const key of Object.keys(init)) {
+        this._map.set(key, String(init[key]));
+      }
+    }
+  }
+  get(k) { return this._map.has(k) ? this._map.get(k) : null; }
+  set(k, v) { this._map.set(String(k), String(v)); }
+  has(k) { return this._map.has(k); }
+  append(k, v) {
+    const key = String(k);
+    const cur = this._map.get(key);
+    this._map.set(key, cur == null ? String(v) : cur + ',' + String(v));
+  }
+  toString() {
+    const parts = [];
+    for (const [k, v] of this._map) {
+      parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    }
+    return parts.join('&');
+  }
+};
+
+if (typeof globalThis.URL === 'undefined') {
+  globalThis.URL = class URL {
+    constructor(url, base) {
+      let s = String(url);
+      if (base != null && base !== '') {
+        const b = String(base).replace(/\/+$/, '');
+        s = s.startsWith('/') ? b + s : b + '/' + s.replace(/^\/+/, '');
+      }
+      this.href = s;
+    }
+    toString() { return this.href; }
+    get pathname() {
+      const q = this.href.indexOf('?');
+      const h = this.href.indexOf('#');
+      const end = q >= 0 && h >= 0 ? Math.min(q, h) : (q >= 0 ? q : (h >= 0 ? h : this.href.length));
+      const start = this.href.indexOf('/', this.href.indexOf('//') + 2);
+      if (start < 0) return '/';
+      const p = this.href.slice(start, end);
+      return p || '/';
+    }
+    get search() {
+      const q = this.href.indexOf('?');
+      if (q < 0) return '';
+      const h = this.href.indexOf('#', q);
+      return h >= 0 ? this.href.slice(q, h) : this.href.slice(q);
+    }
+    get hash() {
+      const h = this.href.indexOf('#');
+      return h >= 0 ? this.href.slice(h) : '';
+    }
+    get host() {
+      const m = this.href.match(/^https?:\/\/([^/?#]+)/i);
+      return m ? m[1] : '';
+    }
+    get hostname() { return this.host.split(':')[0]; }
+    get port() {
+      const h = this.host;
+      const i = h.lastIndexOf(':');
+      return i > 0 && /^\d+$/.test(h.slice(i + 1)) ? h.slice(i + 1) : '';
+    }
+    get protocol() {
+      const m = this.href.match(/^([a-z]+:)/i);
+      return m ? m[1].toLowerCase() : 'http:';
+    }
+    get origin() {
+      const m = this.href.match(/^(https?:\/\/[^/?#]+)/i);
+      return m ? m[1] : '';
+    }
+  };
+}
+
+(function () {
+  if (typeof globalThis.__golitFetch !== 'function') return;
+  globalThis.fetch ??= function (input, init) {
+    const url = typeof input === 'string'
+      ? input
+      : (input && typeof input.url === 'string')
+        ? input.url
+        : String(input);
+    const o = init && typeof init === 'object' ? init : {};
+    const headersObj = o.headers;
+    const headers = {};
+    if (headersObj && typeof headersObj === 'object') {
+      if (typeof headersObj.forEach === 'function') {
+        headersObj.forEach((v, k) => { headers[String(k)] = String(v); });
+      } else {
+        for (const k of Object.keys(headersObj)) {
+          headers[k] = String(headersObj[k]);
+        }
+      }
+    }
+    let bodyStr;
+    if (o.body != null) {
+      bodyStr = typeof o.body === 'string' ? o.body : String(o.body);
+    }
+    const initJson = JSON.stringify({
+      method: o.method,
+      headers,
+      body: bodyStr,
+    });
+    let raw;
+    try {
+      raw = globalThis.__golitFetch(url, initJson);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+    let d;
+    try {
+      d = JSON.parse(raw);
+    } catch (e) {
+      return Promise.reject(new Error('__golitFetch returned invalid JSON'));
+    }
+    if (d.error) {
+      return Promise.reject(new Error(d.error));
+    }
+    const textBody = d.body != null ? String(d.body) : '';
+    return Promise.resolve({
+      ok: !!d.ok,
+      status: d.status | 0,
+      statusText: d.statusText || '',
+      text() { return Promise.resolve(textBody); },
+      json() {
+        try {
+          return Promise.resolve(JSON.parse(textBody));
+        } catch (e) {
+          return Promise.reject(e);
+        }
+      },
+      headers: {
+        get() { return null; },
+      },
+    });
+  };
+})();
+
 // Lit's isServer check -- set via esbuild's define option.
 // No assignment here to avoid esbuild warnings.
