@@ -1,48 +1,237 @@
 /**
- * Minimal DOM shim for running Lit components in QuickJS.
- * Provides just enough of the DOM API for Lit to:
- * 1. Register custom elements
- * 2. Instantiate components
- * 3. Set attributes
- * 4. Call render()
+ * DOM shim for running Lit components in QuickJS.
+ * Event/EventTarget modeled on @lit-labs/ssr-dom-shim/lib/events.js
+ * for full compatibility with @lit/context, controllers, and Lit lifecycle.
  *
- * Based on @lit-labs/ssr-dom-shim but stripped to essentials.
+ * Based on @lit-labs/ssr-dom-shim but adapted for QuickJS.
  */
 
-// --- EventTarget ---
+// --- Event phases ---
+const _NONE = 0;
+const _CAPTURING_PHASE = 1;
+const _AT_TARGET = 2;
+const _BUBBLING_PHASE = 3;
+
+const _isCaptureOption = (options) =>
+  typeof options === 'boolean' ? options : !!(options?.capture);
+
+// --- Event ---
 globalThis.Event = globalThis.Event || class Event {
   constructor(type, options) {
-    this.type = type;
-    this.bubbles = options?.bubbles || false;
-    this.composed = options?.composed || false;
-    this.cancelable = options?.cancelable || false;
+    if (arguments.length === 0) throw new Error('The type argument must be specified');
+    const opts = (typeof options === 'object' && options) ? options : {};
+    this._type = String(type);
+    this._bubbles = !!opts.bubbles;
+    this._composed = !!opts.composed;
+    this._cancelable = !!opts.cancelable;
+    this._defaultPrevented = false;
+    this._propagationStopped = false;
+    this._immediatePropagationStopped = false;
+    this._target = null;
+    this._currentTarget = null;
+    this._eventPhase = _NONE;
+    this._timestamp = Date.now();
+    this._isBeingDispatched = false;
+
+    this.NONE = _NONE;
+    this.CAPTURING_PHASE = _CAPTURING_PHASE;
+    this.AT_TARGET = _AT_TARGET;
+    this.BUBBLING_PHASE = _BUBBLING_PHASE;
+  }
+
+  get type() { return this._type; }
+  get bubbles() { return this._bubbles; }
+  get composed() { return this._composed; }
+  get cancelable() { return this._cancelable; }
+  get defaultPrevented() { return this._cancelable && this._defaultPrevented; }
+  get timeStamp() { return this._timestamp; }
+  get target() { return this._target; }
+  get currentTarget() { return this._currentTarget; }
+  get srcElement() { return this._target; }
+  get isTrusted() { return false; }
+  get returnValue() { return !this._cancelable || !this._defaultPrevented; }
+
+  get eventPhase() {
+    return this._isBeingDispatched ? this._eventPhase : _NONE;
+  }
+
+  get cancelBubble() { return this._propagationStopped; }
+  set cancelBubble(value) { if (value) this._propagationStopped = true; }
+
+  composedPath() {
+    return this._isBeingDispatched ? [this._target] : [];
+  }
+
+  stopPropagation() {
+    this._propagationStopped = true;
+  }
+
+  stopImmediatePropagation() {
+    this._propagationStopped = true;
+    this._immediatePropagationStopped = true;
+  }
+
+  preventDefault() {
+    this._defaultPrevented = true;
   }
 };
+globalThis.Event.NONE = _NONE;
+globalThis.Event.CAPTURING_PHASE = _CAPTURING_PHASE;
+globalThis.Event.AT_TARGET = _AT_TARGET;
+globalThis.Event.BUBBLING_PHASE = _BUBBLING_PHASE;
 
+// --- CustomEvent ---
 globalThis.CustomEvent = globalThis.CustomEvent || class CustomEvent extends Event {
   constructor(type, options) {
     super(type, options);
-    this.detail = options?.detail || null;
+    this._detail = (typeof options === 'object' && options) ? (options.detail ?? null) : null;
   }
+  get detail() { return this._detail; }
 };
 
+// --- EventTarget ---
 class EventTarget {
   constructor() {
-    this.__listeners = {};
+    this.__eventListeners = new Map();
+    this.__captureEventListeners = new Map();
   }
-  addEventListener(type, listener) {
-    (this.__listeners[type] = this.__listeners[type] || []).push(listener);
+
+  addEventListener(type, callback, options) {
+    if (callback == null) return;
+    const listenerMap = _isCaptureOption(options)
+      ? this.__captureEventListeners
+      : this.__eventListeners;
+    let listeners = listenerMap.get(type);
+    if (listeners === undefined) {
+      listeners = new Map();
+      listenerMap.set(type, listeners);
+    } else if (listeners.has(callback)) {
+      return;
+    }
+    const normalizedOpts = (typeof options === 'object' && options) ? options : {};
+    normalizedOpts.signal?.addEventListener?.('abort', () =>
+      this.removeEventListener(type, callback, options));
+    listeners.set(callback, normalizedOpts);
   }
-  removeEventListener(type, listener) {
-    const listeners = this.__listeners[type];
-    if (listeners) {
-      this.__listeners[type] = listeners.filter(l => l !== listener);
+
+  removeEventListener(type, callback, options) {
+    if (callback == null) return;
+    const listenerMap = _isCaptureOption(options)
+      ? this.__captureEventListeners
+      : this.__eventListeners;
+    const listeners = listenerMap.get(type);
+    if (listeners !== undefined) {
+      listeners.delete(callback);
+      if (!listeners.size) listenerMap.delete(type);
     }
   }
+
   dispatchEvent(event) {
-    const listeners = this.__listeners[event.type] || [];
-    for (const l of listeners) l.call(this, event);
-    return true;
+    const composedPath = [this];
+    let parent = this.__eventTargetParent;
+    if (event.composed) {
+      while (parent) {
+        composedPath.push(parent);
+        parent = parent.__eventTargetParent;
+      }
+    } else {
+      while (parent && parent !== this.__host) {
+        composedPath.push(parent);
+        parent = parent.__eventTargetParent;
+      }
+    }
+
+    let stopProp = false;
+    let stopImmediate = false;
+    let eventPhase = _NONE;
+    let target = null;
+    let tmpTarget = null;
+    let currentTarget = null;
+
+    const origStop = event.stopPropagation.bind(event);
+    const origImmediate = event.stopImmediatePropagation.bind(event);
+
+    Object.defineProperties(event, {
+      target: { get() { return target ?? tmpTarget; }, configurable: true, enumerable: true },
+      srcElement: { get() { return target ?? tmpTarget; }, configurable: true, enumerable: true },
+      currentTarget: { get() { return currentTarget; }, configurable: true, enumerable: true },
+      eventPhase: { get() { return eventPhase; }, configurable: true, enumerable: true },
+      composedPath: { value: () => composedPath, configurable: true, enumerable: true },
+      stopPropagation: {
+        value: () => { stopProp = true; origStop(); },
+        configurable: true, enumerable: true,
+      },
+      stopImmediatePropagation: {
+        value: () => { stopImmediate = true; origImmediate(); },
+        configurable: true, enumerable: true,
+      },
+    });
+
+    event._isBeingDispatched = true;
+
+    const invoke = (listener, opts, listenersMap) => {
+      if (typeof listener === 'function') {
+        listener(event);
+      } else if (typeof listener?.handleEvent === 'function') {
+        listener.handleEvent(event);
+      }
+      if (opts.once) listenersMap.delete(listener);
+    };
+
+    const finish = () => {
+      currentTarget = null;
+      eventPhase = _NONE;
+      event._isBeingDispatched = false;
+      return !event.defaultPrevented;
+    };
+
+    // Retarget event.target across shadow boundaries.
+    target = (!this.__host || !event.composed) ? this : null;
+    const retarget = (eventTargets) => {
+      tmpTarget = this;
+      while (tmpTarget.__host && eventTargets.includes(tmpTarget.__host)) {
+        tmpTarget = tmpTarget.__host;
+      }
+    };
+
+    // Capture phase (root -> target)
+    const capturePath = composedPath.slice().reverse();
+    for (const et of capturePath) {
+      if (!target && (!tmpTarget || tmpTarget === et.__host)) {
+        retarget(capturePath.slice(capturePath.indexOf(et)));
+      }
+      currentTarget = et;
+      eventPhase = (et === (target ?? tmpTarget)) ? _AT_TARGET : _CAPTURING_PHASE;
+      const listeners = et.__captureEventListeners?.get(event.type);
+      if (listeners) {
+        for (const [listener, opts] of listeners) {
+          invoke(listener, opts, listeners);
+          if (stopImmediate) return finish();
+        }
+      }
+      if (stopProp) return finish();
+    }
+
+    // Bubble phase (target -> root), or just [this] if non-bubbling.
+    const bubblePath = event.bubbles ? composedPath : [this];
+    tmpTarget = null;
+    for (const et of bubblePath) {
+      if (!target && (!tmpTarget || et === tmpTarget.__host)) {
+        retarget(bubblePath.slice(0, bubblePath.indexOf(et) + 1));
+      }
+      currentTarget = et;
+      eventPhase = (et === (target ?? tmpTarget)) ? _AT_TARGET : _BUBBLING_PHASE;
+      const listeners = et.__eventListeners?.get(event.type);
+      if (listeners) {
+        for (const [listener, opts] of listeners) {
+          invoke(listener, opts, listeners);
+          if (stopImmediate) return finish();
+        }
+      }
+      if (stopProp) return finish();
+    }
+
+    return finish();
   }
 }
 
@@ -138,6 +327,7 @@ class CustomElementRegistry {
   }
 
   define(name, ctor) {
+    if (this.__definitions.has(name)) return;
     ctor.__localName = name;
     this.__definitions.set(name, {
       ctor,
@@ -166,11 +356,11 @@ class CustomElementRegistry {
 
 // --- Globals ---
 // Use ??= so that loading multiple bundles into the same QJS engine
-// does not replace the registry (and wipe previously registered elements).
-globalThis.EventTarget = EventTarget;
-globalThis.Element = Element;
-globalThis.HTMLElement = HTMLElement;
-globalThis.CustomElementRegistry = CustomElementRegistry;
+// does not replace classes or the registry (and wipe previously registered elements).
+globalThis.EventTarget ??= EventTarget;
+globalThis.Element ??= Element;
+globalThis.HTMLElement ??= HTMLElement;
+globalThis.CustomElementRegistry ??= CustomElementRegistry;
 globalThis.customElements ??= new CustomElementRegistry();
 globalThis.document = globalThis.document || {
   nodeType: 9,
@@ -248,7 +438,7 @@ if (typeof globalThis.setTimeout === 'undefined') {
   globalThis.clearInterval = () => {};
 }
 globalThis.ErrorEvent = globalThis.ErrorEvent || class ErrorEvent extends Event {
-  constructor(type, init) { super(type); this.message = init?.message || ''; this.error = init?.error || null; }
+  constructor(type, init) { super(type, init); this.message = init?.message || ''; this.error = init?.error || null; }
 };
 globalThis.MutationObserver = globalThis.MutationObserver || class MutationObserver {
   constructor() {}
@@ -289,11 +479,12 @@ try {
 
 // Lit context root for SSR -- @lit/context checks globalThis.litServerRoot
 // when running in server mode and attaches event listeners to it.
-globalThis.litServerRoot = globalThis.litServerRoot || {
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  dispatchEvent: () => true,
-};
+// Must be a real EventTarget so ContextProvider/ContextRoot can dispatch on it.
+globalThis.litServerRoot = globalThis.litServerRoot || (() => {
+  const root = new HTMLElement();
+  Object.defineProperty(root, 'localName', { get() { return 'lit-server-root'; } });
+  return root;
+})();
 
 // Dynamic import() shim for preloaded modules.
 // When golit pre-loads a module (e.g. prism-esm) into QJS as a script,
