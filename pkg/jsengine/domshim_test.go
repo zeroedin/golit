@@ -53,6 +53,48 @@ func TestDOMShim_CustomElements(t *testing.T) {
 	}
 }
 
+func TestDOMShim_MultipleLoadsPreserveRegistry(t *testing.T) {
+	rt, err := qjs.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rt.Close()
+
+	ctx := rt.Context()
+
+	// Each bundle wraps the domshim in a function scope (via esbuild),
+	// so we wrap in an IIFE to match real bundle structure.
+	wrapped := "(function(){" + domShimJS + "})();"
+
+	_, err = ctx.Eval("bundle1.js", qjs.Code(wrapped))
+	if err != nil {
+		t.Fatalf("first bundle load: %v", err)
+	}
+
+	_, err = ctx.Eval("define.js", qjs.Code(`
+		class FirstEl extends HTMLElement {}
+		customElements.define('first-el', FirstEl);
+	`))
+	if err != nil {
+		t.Fatalf("defining first-el: %v", err)
+	}
+
+	// Load a second bundle with its own domshim copy
+	_, err = ctx.Eval("bundle2.js", qjs.Code(wrapped))
+	if err != nil {
+		t.Fatalf("second bundle load: %v", err)
+	}
+
+	result, err := ctx.Eval("check.js", qjs.Code(
+		`customElements.get('first-el') !== undefined ? 'true' : 'false'`))
+	if err != nil {
+		t.Fatalf("checking registration: %v", err)
+	}
+	if result.String() != "true" {
+		t.Error("first-el should still be registered after loading domshim a second time")
+	}
+}
+
 func TestDOMShim_ShadowRoot(t *testing.T) {
 	rt, err := qjs.New()
 	if err != nil {
