@@ -59,6 +59,10 @@ func NewEngine() (*Engine, error) {
 // global scope once, so they don't need to be re-sent with every
 // RenderElement call.
 func (e *Engine) initHelpers() error {
+	if err := e.injectSSRStringGlobals(); err != nil {
+		return fmt.Errorf("inject SSR globals: %w", err)
+	}
+	e.installFetchBridge()
 	if _, err := e.ctx.Eval("helpers.js", qjs.Code(helpersJS)); err != nil {
 		return err
 	}
