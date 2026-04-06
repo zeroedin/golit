@@ -165,11 +165,13 @@ class CustomElementRegistry {
 }
 
 // --- Globals ---
+// Use ??= so that loading multiple bundles into the same QJS engine
+// does not replace the registry (and wipe previously registered elements).
 globalThis.EventTarget = EventTarget;
 globalThis.Element = Element;
 globalThis.HTMLElement = HTMLElement;
 globalThis.CustomElementRegistry = CustomElementRegistry;
-globalThis.customElements = new CustomElementRegistry();
+globalThis.customElements ??= new CustomElementRegistry();
 globalThis.document = globalThis.document || {
   nodeType: 9,
   createComment: (data) => ({ data, nodeType: 8, textContent: data }),
