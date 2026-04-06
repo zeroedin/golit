@@ -150,6 +150,108 @@ make serve-dev
 
 See `examples/hugo-rhds/Makefile` for the full build pipeline.
 
+## Middleware examples (PHP and Ruby)
+
+These examples show how to SSR Lit in a **dynamic app** (front controller or Rack) instead of batch-transforming static files.
+
+| Example | Directory | Default URL |
+| -------- | ---------- | ------------ |
+| PHP (built-in server) | [`examples/php-middleware/`](examples/php-middleware/) | `http://localhost:8080` |
+| Ruby (Rack) | [`examples/ruby-middleware/`](examples/ruby-middleware/) | `http://localhost:9292` |
+
+Each demo includes a small Lit component (`<my-counter>`), `golit bundle` output under `bundles/`, and middleware that sends HTML through golit before the response is returned.
+
+### Warm path: `golit serve`
+
+By default, **containers** and **`make serve`** start a long-lived **`golit serve`** process that keeps one [`Renderer`](https://pkg.go.dev/github.com/zeroedin/golit#Renderer) warm. The app posts each full HTML document to `POST /render` (see environment variable **`GOLIT_SERVE_URL`**). That avoids spawning **`golit transform`** on every request.
+
+- **`GET /health`** -- readiness probe
+- **`POST /render`** -- body is full HTML; response is transformed HTML
+
+CLI usage (same binary as `transform` / `bundle`):
+
+```bash
+golit serve --defs bundles/ --listen 127.0.0.1:9777
+```
+
+Flags: **`--defs`** (or **`GOLIT_DEFS`**), **`--listen`** (or **`GOLIT_SERVE_LISTEN`**; default `127.0.0.1:9777`), **`--sources`**, repeatable **`--ignore`**.
+
+### Cold path: `golit transform` per request
+
+If **`GOLIT_SERVE_URL`** is **unset**, the examples fall back to running **`golit transform`** on a temporary directory for each HTML response (simpler deployment, higher latency).
+
+### Environment variables
+
+| Variable | Purpose |
+| -------- | -------- |
+| **`GOLIT_SERVE_URL`** | Base URL of `golit serve` (e.g. `http://127.0.0.1:9777`). When set, middleware uses HTTP instead of exec. |
+| **`GOLIT_DEFS`** | Directory of `.golit.bundle.js` files (used by `golit serve` and cold-path transform). |
+| **`GOLIT_BIN`** | Path to `golit` binary for the cold path only. |
+| **`GOLIT_DISABLED`** | If set (e.g. `1`), skip SSR and serve untransformed HTML (used by benchmarks for A/B comparison). |
+
+### PHP example
+
+**Prerequisites:** Go (to build golit from this repo), PHP 8+, Node/npm for `npm install` during `make build`.
+
+```bash
+cd examples/php-middleware
+npm install
+make serve          # http://localhost:8080 — starts golit serve + PHP
+```
+
+**Container** (build from **repository root**; uses Podman in the Makefile — use `docker build` / `docker run` if you prefer):
+
+```bash
+cd examples/php-middleware
+make container      # image: golit-php
+make container-run  # publishes port 8080
+```
+
+**Without SSR** (static `public/` only, for comparison): `make serve-raw`.
+
+### Ruby example
+
+**Prerequisites:** Go, Ruby 3+, Bundler, Node/npm.
+
+```bash
+cd examples/ruby-middleware
+npm install
+bundle install
+make serve            # http://localhost:9292 — golit serve + rackup
+```
+
+**Container:**
+
+```bash
+cd examples/ruby-middleware
+make container        # image: golit-ruby
+make container-run    # publishes port 9292
+```
+
+### Benchmarks (PHP and Ruby)
+
+From each example directory, scripts compare **SSR on vs off** using **curl** timings (TTFB, total time, response size). Optional tiers use **Chrome** for client metrics and traces (no extra load-test binaries).
+
+**Requirements:** **`curl`**, **`podman`** (or adjust `bench.sh` to use `docker`), **`make`**. For **`make bench-full`** / **`bench-trace`**: Google Chrome at the default macOS path (headless).
+
+```bash
+cd examples/php-middleware   # or ruby-middleware
+make bench          # 100 requests per endpoint (/ and /about), tier 1 only
+make bench-quick    # 20 requests
+make bench-full     # adds --browser and --trace (Chrome)
+make bench-trace    # Chrome trace files for chrome://tracing
+```
+
+Direct script flags:
+
+```bash
+./bench.sh -n 50              # custom request count
+./bench.sh --browser          # Performance API metrics via headless Chrome
+./bench.sh --trace            # CPU trace JSON for flame charts
+```
+
+Results and raw CSVs are written to **`bench-results/`** (gitignored). The script builds the image, runs **with** golit (warm `golit serve` in the entrypoint), then **without** (`GOLIT_DISABLED=1`), and prints a side-by-side summary.
+
 ## CLI Reference
 
 ### `golit transform`
@@ -194,6 +296,19 @@ golit bundle node_modules/@rhds/elements/elements/rh-badge/rh-badge.js --out bun
 # Then render a fragment using the pre-built bundles
 golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 ```
+
+### `golit serve`
+
+Run an HTTP server that holds a warm **`Renderer`** and transforms full HTML documents on each request. Intended for middleware integration (PHP, Ruby, etc.); avoids per-request **`golit transform`** process startup.
+
+```bash
+golit serve --defs bundles/ [--listen host:port]
+```
+
+- **`GET /health`** returns `200` and plain text `ok`.
+- **`POST /render`** accepts a full HTML document as the body; response is transformed HTML (`text/html`).
+
+See [Middleware examples](#middleware-examples-php-and-ruby) for how the PHP/Ruby demos wire this up.
 
 ### `golit version`
 
@@ -295,7 +410,7 @@ golit produces Lit-compatible Declarative Shadow DOM with hydration markers:
 ### Package Structure
 
 ```
-cmd/golit/              CLI binary
+cmd/golit/              CLI binary (bundle, compile, transform, render, serve, version)
 pkg/jsengine/           QJS engine, esbuild bundler, DOM shim, template collector,
                         import map parser, bundle registry
 pkg/transformer/        HTML file walker, component discovery, DSD expansion
