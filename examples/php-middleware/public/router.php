@@ -102,5 +102,11 @@ if ($exitCode === 0 && is_file("{$tmpDir}/page.html")) {
     error_log("golit transform failed (exit {$exitCode}): " . implode("\n", $output));
 }
 
-array_map('unlink', glob("{$tmpDir}/*"));
-rmdir($tmpDir);
+foreach (glob("{$tmpDir}/*") ?: [] as $path) {
+    if (is_file($path)) {
+        @unlink($path);
+    }
+}
+if (is_dir($tmpDir)) {
+    @rmdir($tmpDir);
+}
