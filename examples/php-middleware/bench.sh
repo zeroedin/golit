@@ -41,8 +41,25 @@ mkdir -p "$RESULTS_DIR"
 
 # --- helpers ---------------------------------------------------------------
 
+container_engine() {
+  if command -v podman &>/dev/null; then
+    printf '%s\n' podman
+  elif command -v docker &>/dev/null; then
+    printf '%s\n' docker
+  else
+    printf '%s\n' ""
+  fi
+}
+
+CTR=$(container_engine)
+if [[ -z "$CTR" ]]; then
+  echo "ERROR: bench.sh requires podman or docker in PATH" >&2
+  exit 1
+fi
+
 cleanup() {
-  podman rm -f "$CONTAINER_NAME" &>/dev/null || true
+  [[ -n "${CTR:-}" ]] || return
+  "$CTR" rm -f "$CONTAINER_NAME" &>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -67,16 +84,6 @@ wait_for_healthy() {
   done
 }
 
-container_engine() {
-  if command -v podman &>/dev/null; then
-    printf '%s\n' podman
-  elif command -v docker &>/dev/null; then
-    printf '%s\n' docker
-  else
-    printf '%s\n' ""
-  fi
-}
-
 # Maximum Mem%% numeric value over several quick samples (host sees cgroup limit).
 mem_peak_percent() {
   local name="$1" eng="$2"
@@ -94,7 +101,7 @@ mem_peak_percent() {
 write_mem_snapshot() {
   local name="$1" outfile="$2"
   local eng usage pct peak
-  eng=$(container_engine)
+  eng="$CTR"
   {
     echo "engine=${eng:-none}"
     if [[ -z "$eng" ]]; then
@@ -164,7 +171,7 @@ print_startup_section() {
   sw=$(cut -d= -f2 "$wf")
   so=$(cut -d= -f2 "$uf")
   echo ""
-  echo "  Startup (podman run → first 200 on ${HEALTH_PATH})"
+  echo "  Startup ($CTR run → first 200 on ${HEALTH_PATH})"
   echo "  -------------------------------------------"
   printf "  %-18s %s ms\n" "With golit:" "$sw"
   printf "  %-18s %s ms\n" "Without golit:" "$so"
@@ -291,21 +298,21 @@ echo "  Requests per endpoint: $REQUESTS"
 echo "  Endpoints: ${ENDPOINTS[*]}"
 echo "  Browser metrics: $BROWSER"
 echo "  Trace capture: $TRACE"
-echo "  Container memory: podman or docker stats on host"
+echo "  Container runtime: $CTR (run, rm, stats on host)"
 echo "  Startup + first HTML: static probe then cold page timings"
 echo "============================================="
 
 # Build the container image
 echo ""
 echo "Building container image..."
-make -C "$SCRIPT_DIR" container 2>&1 | tail -1
+make -C "$SCRIPT_DIR" container CONTAINER_RUNTIME="$CTR" 2>&1 | tail -1
 
 # --- Run WITH golit --------------------------------------------------------
 echo ""
 echo ">>> Starting container WITH golit SSR..."
 cleanup
 _start=$(now_ms)
-podman run -d --name "$CONTAINER_NAME" -p "$PORT:8080" "$IMAGE" >/dev/null
+"$CTR" run -d --name "$CONTAINER_NAME" -p "$PORT:8080" "$IMAGE" >/dev/null
 wait_for_healthy
 _end=$(now_ms)
 echo "ms=$((_end - _start))" > "$RESULTS_DIR/startup_with_ms.txt"
@@ -337,7 +344,7 @@ cleanup
 # --- Run WITHOUT golit -----------------------------------------------------
 echo ">>> Starting container WITHOUT golit SSR..."
 _start=$(now_ms)
-podman run -d --name "$CONTAINER_NAME" -p "$PORT:8080" \
+"$CTR" run -d --name "$CONTAINER_NAME" -p "$PORT:8080" \
   -e GOLIT_DISABLED=1 "$IMAGE" >/dev/null
 wait_for_healthy
 _end=$(now_ms)
