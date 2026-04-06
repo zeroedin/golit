@@ -189,6 +189,17 @@ If **`GOLIT_SERVE_URL`** is **unset**, the examples fall back to running **`goli
 | **`GOLIT_BIN`** | Path to `golit` binary for the cold path only. |
 | **`GOLIT_DISABLED`** | If set (e.g. `1`), skip SSR and serve untransformed HTML (used by benchmarks for A/B comparison). |
 
+QuickJS SSR (used by **`golit transform`** and **`golit serve`** rendering) exposes **`globalThis.fetch`** backed by Go **`net/http`** (similar in spirit to **`@lit/ssr`** + **`node-fetch`**). **`matchMedia`** is not defined server-side (viewport-only).
+
+| Variable | Purpose |
+| -------- | -------- |
+| **`GOLIT_SSR_LOCATION`** | Base URL string for **`globalThis.location`** (default **`http://localhost/`**), aligned with Lit’s **`getWindow()`** default. |
+| **`GOLIT_FETCH_ALLOWLIST`** | Optional comma-separated **hostnames** (no scheme/port). If set, **`fetch`** may only request those hosts (mitigates SSRF). If unset, only **`http:`** / **`https:`** are allowed. |
+| **`GOLIT_FETCH_TIMEOUT_SEC`** | Per-request timeout in seconds (default **10**, clamped). |
+| **`GOLIT_FETCH_MAX_BODY_BYTES`** | Max response body bytes read (default **16 MiB**, capped). |
+
+After upgrading golit, regenerate pre-bundled defs (e.g. **`make bundle`** in **`examples/hugo-rhds`**) so injected **`domshim.js`** matches the new binary.
+
 ### PHP example
 
 **Prerequisites:** Go (to build golit from this repo), PHP 8+, Node/npm for `npm install` during `make build`.
