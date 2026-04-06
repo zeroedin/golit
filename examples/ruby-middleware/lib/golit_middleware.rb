@@ -1,5 +1,4 @@
 require 'tmpdir'
-require 'fileutils'
 require 'net/http'
 require 'uri'
 
