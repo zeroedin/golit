@@ -230,9 +230,9 @@ make container-run    # publishes port 9292
 
 ### Benchmarks (PHP and Ruby)
 
-From each example directory, scripts compare **SSR on vs off** using **curl** timings (TTFB, total time, response size). Optional tiers use **Chrome** for client metrics and traces (no extra load-test binaries).
+From each example directory, scripts compare **SSR on vs off** using **curl** timings (TTFB, total time, response size), **startup** time from **`podman run`** until a static asset returns **200** (so HTML routes stay cold), **cold first HTML** request per endpoint right after that probe, plus **container memory** from **`podman stats`** or **`docker stats`** on the host after the HTTP load. Optional tiers use **Chrome** for client metrics and traces (no extra load-test binaries).
 
-**Requirements:** **`curl`**, **`podman`** (or adjust `bench.sh` to use `docker`), **`make`**. For **`make bench-full`** / **`bench-trace`**: Google Chrome at the default macOS path (headless).
+**Requirements:** **`curl`**, **`podman`** (or **`docker`** for both run and stats), **`make`**. **`python3`** is used for millisecond startup timing when available (otherwise startup is second-rounded). For **`make bench-full`** / **`bench-trace`**: Google Chrome at the default macOS path (headless).
 
 ```bash
 cd examples/php-middleware   # or ruby-middleware
@@ -250,7 +250,9 @@ Direct script flags:
 ./bench.sh --trace            # CPU trace JSON for flame charts
 ```
 
-Results and raw CSVs are written to **`bench-results/`** (gitignored). The script builds the image, runs **with** golit (warm `golit serve` in the entrypoint), then **without** (`GOLIT_DISABLED=1`), and prints a side-by-side summary.
+Results, raw CSVs, memory snapshots (`mem_with.snapshot`, `mem_without.snapshot`), startup files (`startup_with_ms.txt`, `startup_without_ms.txt`), and per-endpoint cold-request lines (`with_first_*.csv`, `without_first_*.csv`) are written to **`bench-results/`** (gitignored). The script builds the image, runs **with** golit (warm `golit serve` in the entrypoint), then **without** (`GOLIT_DISABLED=1`), and prints a side-by-side summary.
+
+**Reading the numbers:** **Startup** is **instance readiness** (from `podman run` until **`GET /components/my-counter.js`** returns 200). That window includes container boot and the entrypoint; the **with − without** delta is mostly **starting `golit serve`**, paid **once per new container instance**, not on every HTTP request. **Cold first HTML** is the first **`GET`** to each benchmarked path **after** that static probe, so it measures one cold trip through the SSR path without warming `/` or `/about` during the health wait. **Steady-state** timings are the bulk **`curl`** runs after that. In production you can **prewarm** (e.g. readiness checks or startup requests that hit real SSR URLs) to move cold cost into deploy/scale-up instead of the first user.
 
 ## CLI Reference
 

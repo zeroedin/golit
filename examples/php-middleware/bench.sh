@@ -4,8 +4,9 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # PHP + golit performance benchmark
 #
-# Measures server-side (curl) and optionally client-side (Chrome headless)
-# metrics with and without golit SSR, then prints a comparison.
+# Measures server-side (curl), startup time (run → static asset 200), cold
+# first HTML request per endpoint, container memory (podman/docker stats), and
+# optionally client-side (Chrome headless) metrics, then prints a comparison.
 #
 # Usage:
 #   ./bench.sh              # 100 requests, tier 1 only
@@ -21,6 +22,8 @@ REQUESTS=100
 BROWSER=false
 TRACE=false
 ENDPOINTS=("/" "/about")
+# Ready probe must not hit HTML routes (keeps / and /about cold for first-hit).
+HEALTH_PATH="/components/my-counter.js"
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 while [[ $# -gt 0 ]]; do
@@ -43,8 +46,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+now_ms() {
+  if command -v python3 &>/dev/null; then
+    python3 -c 'import time; print(int(time.time() * 1000))'
+  else
+    echo $(( $(date +%s) * 1000 ))
+  fi
+}
+
 wait_for_healthy() {
-  local url="http://localhost:$PORT/"
+  local url="http://localhost:$PORT${HEALTH_PATH}"
   local retries=30
   while ! curl -sf -o /dev/null "$url" 2>/dev/null; do
     retries=$((retries - 1))
@@ -54,6 +65,114 @@ wait_for_healthy() {
     fi
     sleep 0.3
   done
+}
+
+container_engine() {
+  if command -v podman &>/dev/null; then
+    printf '%s\n' podman
+  elif command -v docker &>/dev/null; then
+    printf '%s\n' docker
+  else
+    printf '%s\n' ""
+  fi
+}
+
+# Maximum Mem%% numeric value over several quick samples (host sees cgroup limit).
+mem_peak_percent() {
+  local name="$1" eng="$2"
+  local max=0 k p
+  for k in 1 2 3 4 5; do
+    p=$("$eng" stats "$name" --no-stream --format '{{.MemPerc}}' 2>/dev/null || true)
+    p=$(echo "$p" | tr -dc '0-9.')
+    [[ -z "$p" ]] && p=0
+    max=$(awk -v a="$max" -v b="$p" 'BEGIN { if ((b + 0) > (a + 0)) print b + 0; else print a + 0 }')
+    sleep 0.12
+  done
+  awk -v m="$max" 'BEGIN { printf "%.2f", m }'
+}
+
+write_mem_snapshot() {
+  local name="$1" outfile="$2"
+  local eng usage pct peak
+  eng=$(container_engine)
+  {
+    echo "engine=${eng:-none}"
+    if [[ -z "$eng" ]]; then
+      echo "usage=n/a"
+      echo "pct=n/a"
+      echo "peak_pct=n/a"
+      return
+    fi
+    usage=$("$eng" stats "$name" --no-stream --format '{{.MemUsage}}' 2>/dev/null || echo "n/a")
+    pct=$("$eng" stats "$name" --no-stream --format '{{.MemPerc}}' 2>/dev/null || echo "n/a")
+    peak=$(mem_peak_percent "$name" "$eng")
+    echo "usage=$usage"
+    echo "pct=$pct"
+    echo "peak_pct=$peak"
+  } > "$outfile"
+}
+
+print_container_mem_section() {
+  local wf="$RESULTS_DIR/mem_with.snapshot"
+  local uf="$RESULTS_DIR/mem_without.snapshot"
+  [[ -f "$wf" && -f "$uf" ]] || return
+  local eng u_w p_w pk_w u_u p_u pk_u
+  eng=$(grep '^engine=' "$wf" | cut -d= -f2-)
+  u_w=$(grep '^usage=' "$wf" | cut -d= -f2-)
+  p_w=$(grep '^pct=' "$wf" | cut -d= -f2-)
+  pk_w=$(grep '^peak_pct=' "$wf" | cut -d= -f2-)
+  u_u=$(grep '^usage=' "$uf" | cut -d= -f2-)
+  p_u=$(grep '^pct=' "$uf" | cut -d= -f2-)
+  pk_u=$(grep '^peak_pct=' "$uf" | cut -d= -f2-)
+  echo ""
+  echo "  Container memory (host: ${eng:-n/a}; after HTTP benchmark load)"
+  echo "  -------------------------------------------"
+  echo "  With golit:"
+  echo "    usage / limit:  $u_w"
+  echo "    Mem %:          $p_w    peak ~${pk_w}% (max of 5 quick samples)"
+  echo "  Without golit:"
+  echo "    usage / limit:  $u_u"
+  echo "    Mem %:          $p_u    peak ~${pk_u}% (max of 5 quick samples)"
+  if [[ "$pk_w" != "n/a" && "$pk_u" != "n/a" ]]; then
+    local d
+    d=$(awk -v a="$pk_w" -v b="$pk_u" 'BEGIN { printf "%+.2f", a - b }')
+    echo ""
+    echo "  Peak Mem % delta (with − without): ${d}%"
+  fi
+}
+
+# Single request; same columns as run_curl_bench (cold HTML after health probe).
+record_first_hit() {
+  local url="$1"
+  local outfile="$2"
+  curl -sf -o /dev/null \
+    -w '%{time_starttransfer} %{time_total} %{size_download} %{http_code}\n' \
+    "$url" > "$outfile"
+}
+
+first_hit_ttfb_total_ms() {
+  local file="$1"
+  [[ -s "$file" ]] || { echo "- -"; return; }
+  awk '{ printf "%.2f %.2f", $1 * 1000, $2 * 1000 }' "$file"
+}
+
+print_startup_section() {
+  local wf="$RESULTS_DIR/startup_with_ms.txt"
+  local uf="$RESULTS_DIR/startup_without_ms.txt"
+  [[ -f "$wf" && -f "$uf" ]] || return
+  local sw so
+  sw=$(cut -d= -f2 "$wf")
+  so=$(cut -d= -f2 "$uf")
+  echo ""
+  echo "  Startup (podman run → first 200 on ${HEALTH_PATH})"
+  echo "  -------------------------------------------"
+  printf "  %-18s %s ms\n" "With golit:" "$sw"
+  printf "  %-18s %s ms\n" "Without golit:" "$so"
+  if [[ "$sw" =~ ^[0-9]+$ && "$so" =~ ^[0-9]+$ ]]; then
+    local d
+    d=$((sw - so))
+    printf "  %-18s %+d ms (with − without)\n" "Delta:" "$d"
+  fi
 }
 
 # Collect curl timings into a file: ttfb total_time size_download http_code
@@ -172,6 +291,8 @@ echo "  Requests per endpoint: $REQUESTS"
 echo "  Endpoints: ${ENDPOINTS[*]}"
 echo "  Browser metrics: $BROWSER"
 echo "  Trace capture: $TRACE"
+echo "  Container memory: podman or docker stats on host"
+echo "  Startup + first HTML: static probe then cold page timings"
 echo "============================================="
 
 # Build the container image
@@ -183,14 +304,21 @@ make -C "$SCRIPT_DIR" container 2>&1 | tail -1
 echo ""
 echo ">>> Starting container WITH golit SSR..."
 cleanup
+_start=$(now_ms)
 podman run -d --name "$CONTAINER_NAME" -p "$PORT:8080" "$IMAGE" >/dev/null
 wait_for_healthy
+_end=$(now_ms)
+echo "ms=$((_end - _start))" > "$RESULTS_DIR/startup_with_ms.txt"
 
 for endpoint in "${ENDPOINTS[@]}"; do
   tag=$(echo "$endpoint" | tr '/' '_')
   [[ "$tag" == "_" ]] && tag="_root"
+  record_first_hit "http://localhost:$PORT$endpoint" "$RESULTS_DIR/with_first${tag}.csv"
   run_curl_bench "http://localhost:$PORT$endpoint" "$RESULTS_DIR/with${tag}.csv"
 done
+
+sleep 0.25
+write_mem_snapshot "$CONTAINER_NAME" "$RESULTS_DIR/mem_with.snapshot"
 
 if $BROWSER && [[ -x "$CHROME" ]]; then
   for endpoint in "${ENDPOINTS[@]}"; do
@@ -208,15 +336,22 @@ cleanup
 
 # --- Run WITHOUT golit -----------------------------------------------------
 echo ">>> Starting container WITHOUT golit SSR..."
+_start=$(now_ms)
 podman run -d --name "$CONTAINER_NAME" -p "$PORT:8080" \
   -e GOLIT_DISABLED=1 "$IMAGE" >/dev/null
 wait_for_healthy
+_end=$(now_ms)
+echo "ms=$((_end - _start))" > "$RESULTS_DIR/startup_without_ms.txt"
 
 for endpoint in "${ENDPOINTS[@]}"; do
   tag=$(echo "$endpoint" | tr '/' '_')
   [[ "$tag" == "_" ]] && tag="_root"
+  record_first_hit "http://localhost:$PORT$endpoint" "$RESULTS_DIR/without_first${tag}.csv"
   run_curl_bench "http://localhost:$PORT$endpoint" "$RESULTS_DIR/without${tag}.csv"
 done
+
+sleep 0.25
+write_mem_snapshot "$CONTAINER_NAME" "$RESULTS_DIR/mem_without.snapshot"
 
 if $BROWSER && [[ -x "$CHROME" ]]; then
   for endpoint in "${ENDPOINTS[@]}"; do
@@ -238,6 +373,8 @@ echo "============================================="
 echo "  RESULTS"
 echo "============================================="
 
+print_startup_section
+
 for endpoint in "${ENDPOINTS[@]}"; do
   tag=$(echo "$endpoint" | tr '/' '_')
   [[ "$tag" == "_" ]] && tag="_root"
@@ -253,6 +390,22 @@ for endpoint in "${ENDPOINTS[@]}"; do
   without_size=$(avg_bytes "$without_file")
   size_delta=$((with_size - without_size))
   echo "  Response size: ${with_size}B (with golit) vs ${without_size}B (without) [+${size_delta}B]"
+
+  first_with="$RESULTS_DIR/with_first${tag}.csv"
+  first_without="$RESULTS_DIR/without_first${tag}.csv"
+  read -r cold_w_ttfb cold_w_tot <<< "$(first_hit_ttfb_total_ms "$first_with")"
+  read -r cold_wo_ttfb cold_wo_tot <<< "$(first_hit_ttfb_total_ms "$first_without")"
+  echo ""
+  echo "  First HTML request (cold, after ${HEALTH_PATH} probe)"
+  printf "  %-18s %10s %10s\n" "" "TTFB" "Total"
+  printf "  %-18s %9sms %9sms\n" "With golit:" "$cold_w_ttfb" "$cold_w_tot"
+  printf "  %-18s %9sms %9sms\n" "Without golit:" "$cold_wo_ttfb" "$cold_wo_tot"
+  if [[ "$cold_w_ttfb" != "-" && "$cold_wo_ttfb" != "-" ]]; then
+    print_delta "Cold TTFB" "$cold_w_ttfb" "$cold_wo_ttfb"
+  fi
+  if [[ "$cold_w_tot" != "-" && "$cold_wo_tot" != "-" ]]; then
+    print_delta "Cold total" "$cold_w_tot" "$cold_wo_tot"
+  fi
 
   # TTFB (column 1)
   print_header "TTFB (ms)"
@@ -296,6 +449,8 @@ for endpoint in "${ENDPOINTS[@]}"; do
     fi
   fi
 done
+
+print_container_mem_section
 
 if $TRACE; then
   echo ""
