@@ -28,7 +28,7 @@ class GolitMiddleware
     status, headers, body = @app.call(env)
     return [status, headers, body] if ENV['GOLIT_DISABLED']
 
-    content_type = headers['content-type'].to_s
+    content_type = rack_header(headers, 'content-type').to_s
     return [status, headers, body] unless content_type.include?('text/html')
 
     html = +""
@@ -37,11 +37,24 @@ class GolitMiddleware
 
     transformed = transform(html)
 
+    rack_delete_header!(headers, 'content-length')
     headers['content-length'] = transformed.bytesize.to_s
     [status, headers, [transformed]]
   end
 
   private
+
+  # Rack allows mixed-case header keys depending on server and framework.
+  def rack_header(headers, name)
+    needle = name.downcase
+    headers.each { |k, v| return v if k.to_s.downcase == needle }
+    nil
+  end
+
+  def rack_delete_header!(headers, name)
+    needle = name.downcase
+    headers.reject! { |k, _| k.to_s.downcase == needle }
+  end
 
   def transform(html)
     base = ENV['GOLIT_SERVE_URL'].to_s.strip
