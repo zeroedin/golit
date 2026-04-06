@@ -15,12 +15,18 @@ SERVE_PID=$!
 cleanup() { kill "$SERVE_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 i=0
+ready=0
 while [ "$i" -lt 60 ]; do
   if curl -sf http://127.0.0.1:9777/health >/dev/null 2>&1; then
+    ready=1
     break
   fi
   i=$((i + 1))
   sleep 0.1
 done
+if [ "$ready" != 1 ]; then
+  echo "dev-serve.sh: golit serve did not become ready on /health (timeout)" >&2
+  exit 1
+fi
 export GOLIT_SERVE_URL=http://127.0.0.1:9777
 exec "$@"
