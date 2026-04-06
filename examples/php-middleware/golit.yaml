@@ -1,0 +1,3 @@
+transform:
+  defs: bundles/
+  verbose: true

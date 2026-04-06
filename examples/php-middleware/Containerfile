@@ -1,0 +1,43 @@
+# PHP + golit SSR middleware example
+#
+# Build from repo root:
+#   podman build -f examples/php-middleware/Containerfile -t golit-php .
+#   podman run --rm -p 8080:8080 golit-php
+#
+# Works with both podman and docker.
+
+# --- Stage 1: build golit from source ---
+FROM docker.io/library/golang:1.25-alpine AS golit-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /golit ./cmd/golit
+
+# --- Stage 2: PHP runtime ---
+FROM docker.io/library/php:8.3-alpine
+
+RUN apk add --no-cache nodejs npm wget
+
+COPY --from=golit-builder /golit /usr/local/bin/golit
+
+WORKDIR /app
+COPY examples/php-middleware/package.json examples/php-middleware/package-lock.json* ./
+RUN npm install --omit=dev
+
+COPY examples/php-middleware/ .
+
+RUN chmod +x docker-entrypoint.sh
+
+# Bundle the Lit component for SSR
+RUN mkdir -p bundles && golit bundle components/ --out bundles/
+
+# Symlink components into the public dir for client-side module loading
+RUN ln -sf /app/components /app/public/components
+
+ENV GOLIT_BIN=/usr/local/bin/golit
+ENV GOLIT_DEFS=/app/bundles
+
+EXPOSE 8080
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "public", "public/router.php"]

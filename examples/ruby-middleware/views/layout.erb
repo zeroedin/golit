@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= @title %> | Ruby + golit</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "@lit-labs/ssr-client/lit-element-hydrate-support.js": "https://cdn.jsdelivr.net/npm/@lit-labs/ssr-client@1.1.8/lit-element-hydrate-support.js",
+        "lit": "https://cdn.jsdelivr.net/npm/lit@3.3.2/index.js",
+        "lit/": "https://cdn.jsdelivr.net/npm/lit@3.3.2/",
+        "lit-html": "https://cdn.jsdelivr.net/npm/lit-html@3.3.2/lit-html.js",
+        "lit-html/": "https://cdn.jsdelivr.net/npm/lit-html@3.3.2/",
+        "lit-element/lit-element.js": "https://cdn.jsdelivr.net/npm/lit-element@4.2.2/lit-element.js",
+        "@lit/reactive-element": "https://cdn.jsdelivr.net/npm/@lit/reactive-element@2.1.2/reactive-element.js",
+        "@lit/reactive-element/": "https://cdn.jsdelivr.net/npm/@lit/reactive-element@2.1.2/",
+        "tslib": "https://cdn.jsdelivr.net/npm/tslib@2.8.1/tslib.es6.mjs"
+      }
+    }
+  </script>
+  <script type="module">
+    import '@lit-labs/ssr-client/lit-element-hydrate-support.js';
+    import '/components/my-counter.js';
+  </script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 48rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      color: #1e293b;
+      line-height: 1.6;
+    }
+    nav {
+      display: flex;
+      gap: 1.5rem;
+      padding-bottom: 1rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    nav a {
+      color: #2563eb;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    nav a:hover { text-decoration: underline; }
+    h1 { margin-bottom: 1rem; font-size: 2rem; }
+    h2 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+    p { margin-bottom: 1rem; }
+    my-counter { margin: 1.5rem 0; }
+    code {
+      background: #f1f5f9;
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    ol { margin: 1rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    .badge {
+      display: inline-block;
+      background: #fce7f3;
+      color: #9d174d;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.25em 0.75em;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+  </style>
+<% if @bench %>
+  <script>
+  (function(){if(!location.search.includes("bench"))return;var m={};
+  try{new PerformanceObserver(function(l){l.getEntries().forEach(function(e){
+  if(e.name==="first-contentful-paint")m.fcp=Math.round(e.startTime*100)/100;
+  });}).observe({type:"paint",buffered:true})}catch(_){}
+  try{new PerformanceObserver(function(l){var e=l.getEntries();
+  if(e.length)m.lcp=Math.round(e[e.length-1].startTime*100)/100;
+  }).observe({type:"largest-contentful-paint",buffered:true})}catch(_){}
+  window.addEventListener("load",function(){setTimeout(function(){
+  var n=performance.getEntriesByType("navigation")[0];if(n){
+  m.ttfb=Math.round(n.responseStart*100)/100;
+  m.domContentLoaded=Math.round(n.domContentLoadedEventEnd*100)/100;
+  m.loadEvent=Math.round(n.loadEventEnd*100)/100;
+  m.domInteractive=Math.round(n.domInteractive*100)/100;
+  m.responseEnd=Math.round(n.responseEnd*100)/100;}
+  var el=document.createElement("pre");el.id="golit-perf";
+  el.style.display="none";el.textContent=JSON.stringify(m);
+  document.body.appendChild(el);},500);});})();
+  </script>
+<% end %>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/about">About</a>
+  </nav>
+  <%= @content %>
+</body>
+</html>

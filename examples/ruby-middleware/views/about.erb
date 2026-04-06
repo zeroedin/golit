@@ -1,0 +1,34 @@
+<span class="badge">How it works</span>
+<h1>About This Example</h1>
+<p>
+  This example demonstrates <strong>golit</strong> as Rack middleware in a
+  Ruby application running inside a Podman / Docker container.
+  The <code>GolitMiddleware</code> class works identically with Rails,
+  Sinatra, Hanami, or any Rack-compatible framework.
+</p>
+
+<h2>The Pipeline</h2>
+<ol>
+  <li>The Rack app renders ERB templates containing Lit web components</li>
+  <li><code>GolitMiddleware</code> intercepts the HTML response</li>
+  <li>It writes the HTML to a temp file and runs <code>golit transform</code></li>
+  <li>golit renders each custom element to Declarative Shadow DOM</li>
+  <li>The browser receives pre-rendered HTML that hydrates instantly</li>
+</ol>
+
+<my-counter count="42"></my-counter>
+
+<p>
+  Try viewing the page source&mdash;you&rsquo;ll see a
+  <code>&lt;template shadowrootmode="open"&gt;</code> inside each
+  <code>&lt;my-counter&gt;</code>, proving it was server-side rendered.
+</p>
+
+<h2>Using with Rails</h2>
+<p>
+  Drop the middleware into any Rails app:
+</p>
+<pre><code># config/application.rb
+config.middleware.use GolitMiddleware,
+  golit_bin: '/usr/local/bin/golit',
+  defs_dir:  Rails.root.join('bundles').to_s</code></pre>
