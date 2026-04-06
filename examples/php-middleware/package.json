@@ -1,0 +1,8 @@
+{
+  "name": "php-middleware",
+  "private": true,
+  "description": "PHP + golit SSR middleware example",
+  "dependencies": {
+    "lit": "^3.3.2"
+  }
+}

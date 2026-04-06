@@ -46,6 +46,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+	case "serve":
+		if err := runServe(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "version":
 		fmt.Printf("golit %s\n", version)
 	case "help", "--help", "-h":
@@ -67,6 +72,7 @@ Usage:
   golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
   golit render --defs <bundles-dir> '<html-fragment>'
   golit render --component-js '<source>' '<html-fragment>'
+  golit serve --defs <bundles-dir> [--listen host:port]
   golit version
 
 Commands:
@@ -77,6 +83,7 @@ Commands:
   transform   Post-process HTML files, expanding custom elements into
               Declarative Shadow DOM using bundled components.
   render      Render a single HTML fragment to stdout.
+  serve       Run HTTP server: POST /render (full HTML) -> transformed HTML; GET /health.
   version     Print version information.
 
 Options:
@@ -118,5 +125,8 @@ Examples:
 
   # Render a single element
   golit render --defs bundles/ '<my-greeting name="World"></my-greeting>'
+
+  # Long-lived SSR (warm Renderer) for middleware integration
+  golit serve --defs bundles/ --listen 127.0.0.1:9777
 `)
 }

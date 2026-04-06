@@ -1,0 +1,43 @@
+# Ruby/Rack + golit SSR middleware example
+#
+# Build from repo root:
+#   podman build -f examples/ruby-middleware/Containerfile -t golit-ruby .
+#   podman run --rm -p 9292:9292 golit-ruby
+#
+# Works with both podman and docker.
+
+# --- Stage 1: build golit from source ---
+FROM docker.io/library/golang:1.25-alpine AS golit-builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /golit ./cmd/golit
+
+# --- Stage 2: Ruby runtime ---
+FROM docker.io/library/ruby:3.3-alpine
+
+RUN apk add --no-cache nodejs npm build-base wget
+
+COPY --from=golit-builder /golit /usr/local/bin/golit
+
+WORKDIR /app
+COPY examples/ruby-middleware/Gemfile ./
+RUN bundle install --without development test
+
+COPY examples/ruby-middleware/package.json examples/ruby-middleware/package-lock.json* ./
+RUN npm install --omit=dev
+
+COPY examples/ruby-middleware/ .
+
+RUN chmod +x docker-entrypoint.sh
+
+# Bundle the Lit component for SSR
+RUN mkdir -p bundles && golit bundle components/ --out bundles/
+
+ENV GOLIT_BIN=/usr/local/bin/golit
+ENV GOLIT_DEFS=/app/bundles
+
+EXPOSE 9292
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["bundle", "exec", "rackup", "--host", "0.0.0.0", "--port", "9292"]

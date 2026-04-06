@@ -1,3 +1,6 @@
+# Built CLI binary at repo root only (do not use plain "golit" — that ignores cmd/golit/)
+/golit
+
 bundles/
 node_modules/
 dist/

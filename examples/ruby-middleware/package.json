@@ -1,0 +1,8 @@
+{
+  "name": "ruby-middleware",
+  "private": true,
+  "description": "Ruby/Rack + golit SSR middleware example",
+  "dependencies": {
+    "lit": "^3.3.2"
+  }
+}
