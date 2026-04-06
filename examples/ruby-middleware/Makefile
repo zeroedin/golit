@@ -2,6 +2,8 @@
 GOLIT      := ../../dist/golit
 BUNDLES    := bundles
 COMPONENTS := components
+# Build/run images with podman or docker: `make container CONTAINER_RUNTIME=docker`
+CONTAINER_RUNTIME ?= podman
 
 .PHONY: build bundle serve container container-run bench bench-quick bench-full bench-trace clean
 
@@ -19,13 +21,13 @@ serve: build
 	GOLIT_BIN=$(realpath $(GOLIT)) GOLIT_DEFS=$(realpath $(BUNDLES)) \
 		./dev-serve.sh bundle exec rackup --host 0.0.0.0 --port 9292
 
-## container: Build the container image (works with podman or docker)
+## container: Build the container image (override CONTAINER_RUNTIME=docker if needed)
 container: golit-build
-	podman build -f Containerfile -t golit-ruby ../..
+	$(CONTAINER_RUNTIME) build -f Containerfile -t golit-ruby ../..
 
 ## container-run: Run the container on port 9292
 container-run:
-	podman run --rm -p 9292:9292 golit-ruby
+	$(CONTAINER_RUNTIME) run --rm -p 9292:9292 golit-ruby
 
 ## golit-build: Build golit binary from repo source
 golit-build:

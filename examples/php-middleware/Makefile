@@ -2,6 +2,8 @@
 GOLIT      := ../../dist/golit
 BUNDLES    := bundles
 COMPONENTS := components
+# Build/run images with podman or docker: `make container CONTAINER_RUNTIME=docker`
+CONTAINER_RUNTIME ?= podman
 
 .PHONY: build bundle serve serve-raw container container-run bench bench-quick bench-full bench-trace clean
 
@@ -25,13 +27,13 @@ serve-raw:
 	@echo "Serving at http://localhost:8080 (no SSR — client-side only)"
 	php -S 0.0.0.0:8080 -t public
 
-## container: Build the container image (works with podman or docker)
+## container: Build the container image (override CONTAINER_RUNTIME=docker if needed)
 container: golit-build
-	podman build -f Containerfile -t golit-php ../..
+	$(CONTAINER_RUNTIME) build -f Containerfile -t golit-php ../..
 
 ## container-run: Run the container on port 8080
 container-run:
-	podman run --rm -p 8080:8080 golit-php
+	$(CONTAINER_RUNTIME) run --rm -p 8080:8080 golit-php
 
 ## golit-build: Build golit binary from repo source
 golit-build:
