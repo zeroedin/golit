@@ -6,10 +6,10 @@ SOURCES_DIR := node_modules/@rhds/elements/elements
 
 .PHONY: build bundle hugo serve serve-dev clean golit-build
 
-## bundle: Pre-bundle RHDS components as thin ESM modules with shared runtime
+## bundle: Pre-bundle RHDS components for SSR
 bundle: golit-build
 	@mkdir -p $(BUNDLES_DIR)
-	$(GOLIT) bundle --shared-runtime $(SOURCES_DIR)/ --out $(BUNDLES_DIR)/
+	$(GOLIT) bundle $(SOURCES_DIR)/ --out $(BUNDLES_DIR)/
 
 ## hugo: Build the static site with Hugo
 hugo:

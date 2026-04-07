@@ -101,10 +101,10 @@ golit transform public/ --sources node_modules/@rhds/elements/elements/
 
 ### Mode 4: Pre-Bundled
 
-For CI/CD or when you want maximum transform speed, pre-bundle components with a shared runtime and point at the output directory. The `--shared-runtime` flag produces thin ES modules that share a single copy of Lit, `@lit/context`, and other common dependencies.
+For CI/CD or when you want maximum transform speed, pre-bundle components and point at the output directory. Bundling a directory automatically discovers shared dependencies, produces a shared runtime module, and thin per-component ES modules.
 
 ```bash
-golit bundle --shared-runtime node_modules/@rhds/elements/elements/ --out bundles/
+golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 golit transform public/ --defs bundles/
 ```
 
@@ -288,10 +288,10 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle Lit components for SSR. With `--shared-runtime` (recommended), automatically discovers which `node_modules` packages the components depend on, produces a shared runtime module (`_runtime.golit.module.js`) containing all shared dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
+Pre-bundle Lit components for SSR. When given a directory, automatically discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) containing all shared dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
 
 ```bash
-golit bundle --shared-runtime <src-dir/> [--out <bundles-dir/>] [--minify]
+golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
 golit bundle <source.ts|js> [--out <file>] [--minify]
 ```
 
@@ -304,7 +304,7 @@ Requires pre-built modules (see `golit bundle` above).
 
 ```bash
 # First, bundle the component(s) you want to render
-golit bundle --shared-runtime node_modules/@rhds/elements/elements/ --out bundles/
+golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 
 # Then render a fragment using the pre-built modules
 golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'

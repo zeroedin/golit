@@ -54,11 +54,6 @@ type BundleOptions struct {
 	// Minify minifies the output bundle.
 	Minify bool
 
-	// SharedRuntime produces thin ES modules that import shared deps
-	// from "@golit/runtime" instead of inlining them. When set, the
-	// External list is auto-populated and import specifiers are rewritten.
-	SharedRuntime bool
-
 	// ExternalPackages lists package specifiers to mark as external.
 	// Discovered via DiscoverExternalPackages and passed to
 	// BundleComponentModule(s) so shared deps stay as import statements.
@@ -741,10 +736,9 @@ func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts 
 // so it can be loaded via Engine.EvalModule. Import specifiers for shared deps
 // are rewritten to "@golit/runtime".
 func BundleComponentModule(componentPath string, opts ...BundleOptions) (string, error) {
-	opt := BundleOptions{SharedRuntime: true}
+	opt := BundleOptions{}
 	if len(opts) > 0 {
 		opt = opts[0]
-		opt.SharedRuntime = true
 	}
 	return bundleComponentModule(componentPath, opt)
 }
@@ -797,10 +791,9 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 // BundleComponentModules produces thin ES modules for multiple components in
 // a single esbuild invocation. Returns a map from input path to module source.
 func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map[string]string, error) {
-	opt := BundleOptions{SharedRuntime: true}
+	opt := BundleOptions{}
 	if len(opts) > 0 {
 		opt = opts[0]
-		opt.SharedRuntime = true
 	}
 
 	if len(componentPaths) == 0 {

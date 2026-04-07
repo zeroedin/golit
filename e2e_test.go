@@ -27,7 +27,6 @@ func setupBundles(t *testing.T) string {
 	}
 
 	modules, err := jsengine.BundleComponentModules(sources, jsengine.BundleOptions{
-		SharedRuntime:    true,
 		ExternalPackages: externals,
 	})
 	if err != nil {

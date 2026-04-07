@@ -249,7 +249,6 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	}
 
 	modules, err := BundleComponentModules(paths, BundleOptions{
-		SharedRuntime:    true,
 		ExternalPackages: externals,
 	})
 	if err != nil {
