@@ -19,6 +19,10 @@ import (
 // without executing the bundle. Valid custom element names must contain a hyphen.
 var defineRe = regexp.MustCompile(`customElements\s*\.\s*define\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
 
+// decoratorDefineRe matches the Lit @customElement decorator pattern used in
+// thin ESM modules: customElement("tag-name") or customElement3("tag-name").
+var decoratorDefineRe = regexp.MustCompile(`customElement\d*\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
+
 // discoveryJS is the snippet evaluated inside QJS to read registered tag names
 // from the DOM shim's customElements.__definitions map.
 const discoveryJS = `(function() {
@@ -38,8 +42,14 @@ const discoveryJS = `(function() {
 type Registry struct {
 	mu sync.RWMutex
 
-	// bundles maps tag names to their bundle JS content
+	// bundles maps tag names to their legacy bundle JS content (script mode)
 	bundles map[string]string
+
+	// modules maps tag names to their thin ES module JS content (module mode)
+	modules map[string]string
+
+	// sharedRuntime is the shared runtime module source (loaded once per engine)
+	sharedRuntime string
 
 	// unregistered tracks custom element tags found but not in the registry
 	unregistered map[string]bool
@@ -53,12 +63,14 @@ type Registry struct {
 func NewRegistry() *Registry {
 	return &Registry{
 		bundles:        make(map[string]string),
+		modules:        make(map[string]string),
 		unregistered:   make(map[string]bool),
 		processedPaths: make(map[string]bool),
 	}
 }
 
-// LoadDir loads all .golit.bundle.js files from a directory.
+// LoadDir loads all .golit.bundle.js and .golit.module.js files from a directory.
+// If a _runtime.golit.module.js file is present, it is loaded as the shared runtime.
 // Tag names are discovered via a regex pre-pass; bundles the regex
 // misses are batched through a single reusable QJS engine.
 func (r *Registry) LoadDir(dir string) error {
@@ -68,17 +80,56 @@ func (r *Registry) LoadDir(dir string) error {
 	}
 
 	var bundles []string
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".golit.bundle.js") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			return fmt.Errorf("reading bundle %s: %w", entry.Name(), err)
-		}
-		bundles = append(bundles, string(data))
+	var modules []struct {
+		name   string
+		source string
 	}
 
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		fullPath := filepath.Join(dir, name)
+
+		if name == "_runtime.golit.module.js" {
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				return fmt.Errorf("reading runtime module %s: %w", name, err)
+			}
+			r.SetSharedRuntime(string(data))
+			continue
+		}
+
+		if strings.HasSuffix(name, ".golit.module.js") {
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				return fmt.Errorf("reading module %s: %w", name, err)
+			}
+			modules = append(modules, struct {
+				name   string
+				source string
+			}{name: name, source: string(data)})
+			continue
+		}
+
+		if strings.HasSuffix(name, ".golit.bundle.js") {
+			data, err := os.ReadFile(fullPath)
+			if err != nil {
+				return fmt.Errorf("reading bundle %s: %w", name, err)
+			}
+			bundles = append(bundles, string(data))
+		}
+	}
+
+	// Register thin modules: discover tag names via regex.
+	for _, mod := range modules {
+		if tagName, ok := discoverTagNameFast(mod.source); ok {
+			r.RegisterModule(tagName, mod.source)
+		}
+	}
+
+	// Register legacy bundles.
 	return r.registerBundles(bundles)
 }
 
@@ -146,27 +197,63 @@ func (r *Registry) Register(tagName string, bundle string) {
 	r.mu.Unlock()
 }
 
-// Lookup returns the bundle JS for a given tag name, or "" if not found.
+// Lookup returns the legacy bundle JS for a given tag name, or "" if not found.
 func (r *Registry) Lookup(tagName string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.bundles[tagName]
 }
 
-// Has returns true if a bundle is registered for the given tag name.
+// LookupModule returns the thin ES module JS for a given tag name, or "" if not found.
+func (r *Registry) LookupModule(tagName string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.modules[tagName]
+}
+
+// SharedRuntime returns the shared runtime module source, or "" if not set.
+func (r *Registry) SharedRuntime() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.sharedRuntime
+}
+
+// SetSharedRuntime sets the shared runtime module source.
+func (r *Registry) SetSharedRuntime(source string) {
+	r.mu.Lock()
+	r.sharedRuntime = source
+	r.mu.Unlock()
+}
+
+// RegisterModule adds a thin ES module by tag name.
+func (r *Registry) RegisterModule(tagName string, source string) {
+	r.mu.Lock()
+	r.modules[tagName] = source
+	r.mu.Unlock()
+}
+
+// Has returns true if a bundle or module is registered for the given tag name.
 func (r *Registry) Has(tagName string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	_, ok := r.bundles[tagName]
-	return ok
+	_, okBundle := r.bundles[tagName]
+	_, okModule := r.modules[tagName]
+	return okBundle || okModule
 }
 
-// TagNames returns all registered tag names.
+// TagNames returns all registered tag names (from both bundles and modules).
 func (r *Registry) TagNames() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	names := make([]string, 0, len(r.bundles))
+	seen := make(map[string]bool, len(r.bundles)+len(r.modules))
 	for name := range r.bundles {
+		seen[name] = true
+	}
+	for name := range r.modules {
+		seen[name] = true
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
 		names = append(names, name)
 	}
 	return names
@@ -321,22 +408,28 @@ func DiscoverTagName(bundle string) (string, error) {
 }
 
 // discoverTagNameFast extracts the tag name from a customElements.define()
-// call using a regex, avoiding QJS entirely. Returns ("", false) when the
-// regex cannot find a match.
+// or @customElement() decorator call using a regex, avoiding QJS entirely.
+// Returns ("", false) when the regex cannot find a match.
 func discoverTagNameFast(bundle string) (string, bool) {
+	// Try customElements.define() first (legacy bundles).
 	idx := strings.LastIndex(bundle, "customElements")
-	if idx < 0 {
-		return "", false
+	if idx >= 0 {
+		if match := defineRe.FindStringSubmatch(bundle[idx:]); match != nil {
+			return match[1], true
+		}
+		matches := defineRe.FindAllStringSubmatch(bundle, -1)
+		if len(matches) > 0 {
+			return matches[len(matches)-1][1], true
+		}
 	}
-	if match := defineRe.FindStringSubmatch(bundle[idx:]); match != nil {
-		return match[1], true
+
+	// Try @customElement() decorator pattern (thin ESM modules).
+	matches := decoratorDefineRe.FindAllStringSubmatch(bundle, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1][1], true
 	}
-	// Last occurrence wasn't a .define() call; fall back to full scan.
-	matches := defineRe.FindAllStringSubmatch(bundle, -1)
-	if len(matches) == 0 {
-		return "", false
-	}
-	return matches[len(matches)-1][1], true
+
+	return "", false
 }
 
 func discoverTagName(bundle string) (string, error) {
