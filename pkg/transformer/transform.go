@@ -168,6 +168,24 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 		}
 	}
 
+	// Bundle dynamic import targets from thin modules as preloaded modules.
+	for _, target := range registry.DynamicImportTargets() {
+		modPath, err := jsengine.ResolveModulePath(target, dir)
+		if err != nil {
+			continue
+		}
+		bundle, err := jsengine.BundlePreload(modPath, target)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: could not bundle dynamic import target %s: %v\n", target, err)
+			continue
+		}
+		preloadBundles = append(preloadBundles, bundle)
+		opts.Preload = append(opts.Preload, target)
+		if opts.Verbose {
+			fmt.Fprintf(os.Stderr, "golit: preloaded dynamic import target %s\n", target)
+		}
+	}
+
 	// ── Pass 1: Discovery (sequential) ──────────────────────────────
 	// Read files once and cache their contents so the render pass
 	// doesn't need to re-read them from disk. Collect all source paths
@@ -259,12 +277,15 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	return result, nil
 }
 
-func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Engine, error) {
+func initEngine(preloadBundles []string, preloadModules []string, runtimeExternals ...[]string) (*jsengine.Engine, error) {
 	engine, err := jsengine.NewEngine()
 	if err != nil {
 		return nil, err
 	}
 	engine.SetPreloadModules(preloadModules)
+	if len(runtimeExternals) > 0 {
+		engine.SetRuntimeExternals(runtimeExternals[0])
+	}
 	for _, pb := range preloadBundles {
 		if err := engine.LoadBundle(pb); err != nil {
 			engine.Close()
@@ -275,7 +296,7 @@ func initEngine(preloadBundles []string, preloadModules []string) (*jsengine.Eng
 }
 
 func transformSequential(htmlFiles []string, dir string, registry *jsengine.Registry, opts Options, preloadBundles []string, fileCache map[string][]byte) (*Result, *jsengine.Engine, error) {
-	engine, err := initEngine(preloadBundles, opts.Preload)
+	engine, err := initEngine(preloadBundles, opts.Preload, registry.RuntimeExternals())
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating JS engine: %w", err)
 	}

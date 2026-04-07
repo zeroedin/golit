@@ -1006,6 +1006,43 @@ func buildRuntimeEntryFromModules(modules map[string]string) string {
 	return b.String()
 }
 
+// ExtractDynamicImportTargets scans thin module sources for dynamic import()
+// calls and returns non-local, non-runtime specifiers.
+// Matches patterns like: import("@rhds/tokens/css/default-theme.css.js")
+func ExtractDynamicImportTargets(modules map[string]string) []string {
+	return extractDynamicImportTargets(modules)
+}
+
+func extractDynamicImportTargets(modules map[string]string) []string {
+	seen := make(map[string]bool)
+	var targets []string
+
+	for _, source := range modules {
+		for _, line := range strings.Split(source, "\n") {
+			trimmed := strings.TrimSpace(line)
+			for _, quote := range []string{`"`, `'`} {
+				prefix := "import(" + quote
+				idx := strings.Index(trimmed, prefix)
+				if idx < 0 {
+					continue
+				}
+				rest := trimmed[idx+len(prefix):]
+				end := strings.Index(rest, quote+")")
+				if end < 0 {
+					continue
+				}
+				spec := rest[:end]
+				if !isLocalOrRuntime(spec) && !seen[spec] {
+					seen[spec] = true
+					targets = append(targets, spec)
+				}
+			}
+		}
+	}
+	sort.Strings(targets)
+	return targets
+}
+
 // ResolveModulePath resolves a bare module specifier to a file path by
 // looking up its entry point in node_modules/package.json.
 func ResolveModulePath(specifier string, fromDir string) (string, error) {
