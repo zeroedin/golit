@@ -35,18 +35,56 @@ func NewEnginePool(size int) (*EnginePool, error) {
 }
 
 // PreloadAll drains every engine from the pool, configures preload modules,
-// loads any raw preload bundles, loads the shared runtime (if present), then
-// loads all registry component bundles/modules.
+// loads any raw preload bundles, bundles dynamic import targets as preloads,
+// loads the shared runtime (if present), then loads all registry component
+// bundles/modules.
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
+
+	// Bundle dynamic import targets that aren't already in preloadModules.
+	// When called from transform.go, targets are pre-bundled and passed via
+	// preloadBundles/preloadModules. When called from serve.go, this is the
+	// only place they get bundled.
+	already := make(map[string]bool, len(preloadModules))
+	for _, m := range preloadModules {
+		already[m] = true
+	}
+	var dynamicBundles []string
+	allPreloadModules := append([]string(nil), preloadModules...)
+	for _, target := range registry.DynamicImportTargets() {
+		if already[target] {
+			continue
+		}
+		baseDir := registry.BaseDir()
+		if baseDir == "" {
+			baseDir = "."
+		}
+		modPath, err := ResolveModulePath(target, baseDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: cannot resolve dynamic import target %s: %v\n", target, err)
+			continue
+		}
+		bundle, err := BundlePreload(modPath, target)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: cannot bundle dynamic import target %s: %v\n", target, err)
+			continue
+		}
+		dynamicBundles = append(dynamicBundles, bundle)
+		allPreloadModules = append(allPreloadModules, target)
+	}
+
 	drained := make([]*Engine, 0, p.size)
 
 	for i := 0; i < p.size; i++ {
 		e := <-p.engines
-		e.SetPreloadModules(preloadModules)
+		e.SetPreloadModules(allPreloadModules)
+		e.SetRuntimeExternals(registry.RuntimeExternals())
 		for _, pb := range preloadBundles {
 			_ = e.LoadBundle(pb)
+		}
+		for _, db := range dynamicBundles {
+			_ = e.LoadBundle(db)
 		}
 		// Load shared runtime once per engine before any components.
 		if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {

@@ -126,13 +126,14 @@ func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, op
 	})
 
 	if len(result.Errors) > 0 {
-		var msgs []string
 		for _, e := range result.Errors {
-			msgs = append(msgs, e.Text)
+			fmt.Fprintf(os.Stderr, "golit: warning: discovery: %s\n", e.Text)
 		}
-		return nil, fmt.Errorf("esbuild discovery errors: %s", strings.Join(msgs, "; "))
 	}
 
+	if result.Metafile == "" {
+		return nil, nil
+	}
 	return parseMetafilePackages(result.Metafile)
 }
 
@@ -204,7 +205,7 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 		return "", err
 	}
 
-	code, hasTopLevelAwait := stripESMExports(esm)
+	code, hasTopLevelAwait, _ := stripESMExports(esm)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
@@ -266,11 +267,12 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 }
 
 // stripESMExports removes export keywords from bundled ESM output so it
-// can be evaluated in QJS script mode. Since esbuild has already bundled
-// all dependencies, there are no import statements to handle.
-// Also detects top-level await (await at column 0, not inside functions).
-func stripESMExports(code string) (string, bool) {
+// can be evaluated in QJS script mode. Returns the stripped code, whether
+// top-level await was found, and whether a default export was found.
+// Default exports are assigned to __golit_default_export for later capture.
+func stripESMExports(code string) (string, bool, bool) {
 	hasTopLevelAwait := false
+	hasDefaultExport := false
 	inExportBlock := false
 	var b strings.Builder
 	b.Grow(len(code))
@@ -311,7 +313,8 @@ func stripESMExports(code string) (string, bool) {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "export default ") {
-			b.WriteString(strings.Replace(line, "export default ", "", 1))
+			b.WriteString(strings.Replace(line, "export default ", "var __golit_default_export = ", 1))
+			hasDefaultExport = true
 			continue
 		}
 		if strings.HasPrefix(trimmed, "export var ") ||
@@ -333,7 +336,7 @@ func stripESMExports(code string) (string, bool) {
 		b.WriteString(line)
 	}
 
-	return b.String(), hasTopLevelAwait
+	return b.String(), hasTopLevelAwait, hasDefaultExport
 }
 
 
@@ -474,7 +477,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 	}
 
 	code := string(result.OutputFiles[0].Contents)
-	code, hasTopLevelAwait := stripESMExports(code)
+	code, hasTopLevelAwait, _ := stripESMExports(code)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
@@ -494,18 +497,24 @@ func BundlePreload(modulePath string, name string) (string, error) {
 
 	exportNames := extractESMExportNames(esm)
 
-	code, hasTopLevelAwait := stripESMExports(esm)
+	code, hasTopLevelAwait, hasDefaultExport := stripESMExports(esm)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
 
 	var capture strings.Builder
 	capture.WriteString(fmt.Sprintf("\nglobalThis.__preloadedModules[%q] = {", name))
-	for i, n := range exportNames {
-		if i > 0 {
+	first := true
+	if hasDefaultExport {
+		capture.WriteString("default: (typeof __golit_default_export !== 'undefined' ? __golit_default_export : undefined)")
+		first = false
+	}
+	for _, n := range exportNames {
+		if !first {
 			capture.WriteString(", ")
 		}
 		capture.WriteString(fmt.Sprintf("%s: (typeof %s !== 'undefined' ? %s : undefined)", n, n, n))
+		first = false
 	}
 	capture.WriteString("};\n")
 
@@ -1003,6 +1012,51 @@ func buildRuntimeEntryFromModules(modules map[string]string) string {
 		return "export {};\n"
 	}
 	return b.String()
+}
+
+// ExtractDynamicImportTargets scans thin module sources for dynamic import()
+// calls and returns non-local, non-runtime specifiers.
+// Matches patterns like: import("@rhds/tokens/css/default-theme.css.js")
+func ExtractDynamicImportTargets(modules map[string]string) []string {
+	return extractDynamicImportTargets(modules)
+}
+
+func extractDynamicImportTargets(modules map[string]string) []string {
+	seen := make(map[string]bool)
+	var targets []string
+
+	for _, source := range modules {
+		pos := 0
+		for pos < len(source) {
+			idx := strings.Index(source[pos:], "import(")
+			if idx < 0 {
+				break
+			}
+			start := pos + idx + len("import(")
+			if start >= len(source) {
+				break
+			}
+			quote := source[start]
+			if quote != '"' && quote != '\'' {
+				pos = start
+				continue
+			}
+			closeStr := string(quote) + ")"
+			end := strings.Index(source[start+1:], closeStr)
+			if end < 0 {
+				pos = start + 1
+				continue
+			}
+			spec := source[start+1 : start+1+end]
+			if !isLocalOrRuntime(spec) && !seen[spec] {
+				seen[spec] = true
+				targets = append(targets, spec)
+			}
+			pos = start + 1 + end + len(closeStr)
+		}
+	}
+	sort.Strings(targets)
+	return targets
 }
 
 // ResolveModulePath resolves a bare module specifier to a file path by

@@ -33,6 +33,22 @@ type Registry struct {
 	// sharedRuntime is the shared runtime module source (loaded once per engine)
 	sharedRuntime string
 
+	// runtimeExternals lists the package prefixes bundled into the shared
+	// runtime (e.g. "lit", "lit/*", "@rhds/tokens", "@rhds/tokens/*").
+	// Used by Engine.shimDynamicImports to rewrite dynamic import() calls
+	// for these packages to import("@golit/runtime").
+	runtimeExternals []string
+
+	// dynamicImportTargets lists specific module specifiers that appear in
+	// dynamic import() calls in thin modules (e.g. "@rhds/tokens/css/default-theme.css.js").
+	// These need to be bundled as standalone preloaded modules so the engine
+	// can resolve them at runtime.
+	dynamicImportTargets []string
+
+	// baseDir is the directory from which modules were loaded, used to
+	// resolve dynamic import targets relative to the correct node_modules.
+	baseDir string
+
 	// unregistered tracks custom element tags found but not in the registry
 	unregistered map[string]bool
 
@@ -53,12 +69,18 @@ func NewRegistry() *Registry {
 
 // LoadDir loads all .golit.module.js files from a directory.
 // If a _runtime.golit.module.js file is present, it is loaded as the shared runtime.
-// Tag names are discovered via a regex pre-pass.
+// Tag names are discovered via a regex pre-pass. Dynamic import() targets in
+// the thin modules are collected and stored as dynamic import targets.
 func (r *Registry) LoadDir(dir string) error {
+	absDir, _ := filepath.Abs(dir)
+	r.SetBaseDir(absDir)
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("reading modules directory %s: %w", dir, err)
 	}
+
+	moduleSources := make(map[string]string)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -82,9 +104,17 @@ func (r *Registry) LoadDir(dir string) error {
 				return fmt.Errorf("reading module %s: %w", name, err)
 			}
 			source := string(data)
+			moduleSources[name] = source
 			if tagName, ok := discoverTagNameFast(source); ok {
 				r.RegisterModule(tagName, source)
 			}
+		}
+	}
+
+	if len(moduleSources) > 0 {
+		targets := extractDynamicImportTargets(moduleSources)
+		if len(targets) > 0 {
+			r.SetDynamicImportTargets(targets)
 		}
 	}
 
@@ -145,6 +175,49 @@ func (r *Registry) SharedRuntime() string {
 func (r *Registry) SetSharedRuntime(source string) {
 	r.mu.Lock()
 	r.sharedRuntime = source
+	r.mu.Unlock()
+}
+
+// RuntimeExternals returns a copy of the package prefixes bundled into the shared runtime.
+func (r *Registry) RuntimeExternals() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]string(nil), r.runtimeExternals...)
+}
+
+// SetRuntimeExternals stores the package prefixes bundled into the shared runtime.
+func (r *Registry) SetRuntimeExternals(externals []string) {
+	r.mu.Lock()
+	r.runtimeExternals = externals
+	r.mu.Unlock()
+}
+
+// DynamicImportTargets returns a copy of the module specifiers found in
+// dynamic import() calls within thin modules.
+func (r *Registry) DynamicImportTargets() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]string(nil), r.dynamicImportTargets...)
+}
+
+// SetDynamicImportTargets stores the dynamic import target specifiers.
+func (r *Registry) SetDynamicImportTargets(targets []string) {
+	r.mu.Lock()
+	r.dynamicImportTargets = targets
+	r.mu.Unlock()
+}
+
+// BaseDir returns the directory from which modules were loaded.
+func (r *Registry) BaseDir() string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.baseDir
+}
+
+// SetBaseDir stores the base directory for module resolution.
+func (r *Registry) SetBaseDir(dir string) {
+	r.mu.Lock()
+	r.baseDir = dir
 	r.mu.Unlock()
 }
 
@@ -215,6 +288,9 @@ func (r *Registry) ProcessedPaths() []string {
 // LoadSourceDir bundles all .js/.ts files in a directory tree as thin ES modules
 // and registers them. Also builds and registers the shared runtime.
 func (r *Registry) LoadSourceDir(dir string) error {
+	absDir, _ := filepath.Abs(dir)
+	r.SetBaseDir(absDir)
+
 	var paths []string
 	if err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -262,6 +338,13 @@ func (r *Registry) LoadSourceDir(dir string) error {
 			return fmt.Errorf("building shared runtime: %w", err)
 		}
 		r.SetSharedRuntime(rt)
+	}
+
+	r.SetRuntimeExternals(externals)
+
+	targets := extractDynamicImportTargets(modules)
+	if len(targets) > 0 {
+		r.SetDynamicImportTargets(targets)
 	}
 
 	modules = RewriteModuleImports(modules, externals)

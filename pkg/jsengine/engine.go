@@ -31,10 +31,11 @@ type RenderResult struct {
 
 // Engine executes Lit components in QJS for SSR rendering.
 type Engine struct {
-	runtime        *qjs.Runtime
-	ctx            *qjs.Context
-	loaded         map[string]bool // track which bundles have been loaded
-	preloadModules []string        // module names available via __preloadedModules
+	runtime          *qjs.Runtime
+	ctx              *qjs.Context
+	loaded           map[string]bool // track which bundles have been loaded
+	preloadModules   []string        // module names available via __preloadedModules
+	runtimeExternals []string        // package prefixes bundled into @golit/runtime
 }
 
 // NewEngine creates a new QJS engine instance.
@@ -101,6 +102,13 @@ func (e *Engine) SetPreloadModules(modules []string) {
 	e.preloadModules = modules
 }
 
+// SetRuntimeExternals tells the engine which package prefixes are bundled
+// into the @golit/runtime module. Dynamic import() calls for these packages
+// will be rewritten to import("@golit/runtime").
+func (e *Engine) SetRuntimeExternals(externals []string) {
+	e.runtimeExternals = externals
+}
+
 // LoadBundle loads a pre-bundled component JS file into the engine as a script.
 // Can be called multiple times to load multiple components.
 // If preload modules are set, dynamic import() calls for those modules
@@ -145,10 +153,12 @@ type shimPattern struct {
 }
 
 // shimDynamicImports replaces dynamic import("module") expressions with
-// Promise.resolve(globalThis.__preloadedModules["module"]) for preloaded modules.
+// Promise.resolve(globalThis.__preloadedModules["module"]) for preloaded modules,
+// and rewrites import("pkg/...") to import("@golit/runtime") for packages
+// bundled into the shared runtime.
 // Handles both quote styles and subpath imports (e.g. import("mod/sub.js")).
 func (e *Engine) shimDynamicImports(code string) string {
-	if len(e.preloadModules) == 0 || !strings.Contains(code, "import(") {
+	if (len(e.preloadModules) == 0 && len(e.runtimeExternals) == 0) || !strings.Contains(code, "import(") {
 		return code
 	}
 
@@ -181,9 +191,6 @@ func (e *Engine) shimDynamicImports(code string) string {
 				code[matchStart:matchStart+len(p.prefix)] != p.prefix {
 				continue
 			}
-			// Boundary check: the char after the module name must be
-			// the closing quote (exact match) or '/' (subpath import).
-			// Without this, preloading "lit" would also match "lit-html".
 			nextChar := code[matchStart+len(p.prefix)]
 			if nextChar != p.close[0] && nextChar != '/' {
 				continue
@@ -203,6 +210,14 @@ func (e *Engine) shimDynamicImports(code string) string {
 			break
 		}
 
+		if !matched && len(e.runtimeExternals) > 0 {
+			if rewritten, newPos := e.shimRuntimeImport(code, matchStart); rewritten != "" {
+				b.WriteString(rewritten)
+				pos = newPos
+				matched = true
+			}
+		}
+
 		if !matched {
 			b.WriteString(importOpen)
 			pos = matchStart + len(importOpen)
@@ -210,6 +225,30 @@ func (e *Engine) shimDynamicImports(code string) string {
 	}
 
 	return b.String()
+}
+
+// shimRuntimeImport checks if a dynamic import() at the given position
+// matches a runtime external package and rewrites it to import("@golit/runtime").
+func (e *Engine) shimRuntimeImport(code string, matchStart int) (string, int) {
+	for _, quote := range []byte{'"', '\''} {
+		prefix := `import(` + string(quote)
+		if matchStart+len(prefix) > len(code) ||
+			code[matchStart:matchStart+len(prefix)] != prefix {
+			continue
+		}
+		closeStr := string(quote) + ")"
+		end := strings.Index(code[matchStart+len(prefix):], closeStr)
+		if end < 0 {
+			continue
+		}
+		specifier := code[matchStart+len(prefix) : matchStart+len(prefix)+end]
+		if matchesExternals(specifier, e.runtimeExternals) {
+			full := code[matchStart : matchStart+len(prefix)+end+len(closeStr)]
+			rewritten := `import(` + string(quote) + `@golit/runtime` + string(quote) + `)/*golit-runtime:` + full + `*/`
+			return rewritten, matchStart + len(full)
+		}
+	}
+	return "", 0
 }
 
 // LoadBundleForTag loads a component from the registry for a specific tag name.
@@ -232,6 +271,10 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, err
 			return false, fmt.Errorf("loading shared runtime: %w", err)
 		}
 		e.loaded["@golit/runtime"] = true
+	}
+
+	if ext := registry.RuntimeExternals(); len(ext) > 0 && len(e.runtimeExternals) == 0 {
+		e.runtimeExternals = ext
 	}
 
 	if err := e.EvalModule(tagName+".js", source); err != nil {
