@@ -46,7 +46,7 @@ lightdom:
 
 <rh-footer data-analytics-region="page-footer">
   <a slot="logo" href="https://redhat.com/en" data-analytics-category="Footer" data-analytics-text="Logo">
-    <img alt="Red Hat logo" src="https://static.redhat.com/libs/redhat/brand-assets/2/corp/logo--on-dark.svg" loading="lazy" />
+    <img alt="Red Hat logo" src="/redhat/brand/logo--on-dark.svg" loading="lazy" />
   </a>
   <rh-footer-social-link slot="social-links"
                          icon="linkedin"
@@ -152,7 +152,7 @@ lightdom:
 
 <rh-footer data-analytics-region="page-footer">
   <a slot="logo" href="https://redhat.com/en" data-analytics-category="Footer" data-analytics-text="Logo">
-    <img alt="Red Hat logo" src="https://static.redhat.com/libs/redhat/brand-assets/2/corp/logo--on-dark.svg" loading="lazy" />
+    <img alt="Red Hat logo" src="/redhat/brand/logo--on-dark.svg" loading="lazy" />
   </a>
   <rh-footer-social-link slot="social-links" icon="linkedin"><a href="https://www.linkedin.com/company/red-hat" data-analytics-region="social-links-exit" data-analytics-category="Footer|social-links" data-analytics-text="LinkedIn">LinkedIn</a></rh-footer-social-link>
   <rh-footer-social-link slot="social-links" icon="youtube"><a href="https://www.youtube.com/user/RedHatVideos" data-analytics-region="social-links-exit" data-analytics-category="Footer|social-links" data-analytics-text="YouTube">YouTube</a></rh-footer-social-link>
