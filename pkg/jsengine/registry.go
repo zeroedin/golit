@@ -241,23 +241,30 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		return nil
 	}
 
-	modules, err := BundleComponentModules(paths)
+	nodeModulesDir := FindNodeModules(paths[0])
+
+	externals, err := DiscoverExternalPackages(paths, nodeModulesDir)
+	if err != nil {
+		return fmt.Errorf("discovering external packages: %w", err)
+	}
+
+	modules, err := BundleComponentModules(paths, BundleOptions{
+		SharedRuntime:    true,
+		ExternalPackages: externals,
+	})
 	if err != nil {
 		return fmt.Errorf("batch bundling sources: %w", err)
 	}
 
-	if r.SharedRuntime() == "" {
-		nodeModulesDir := FindNodeModules(paths[0])
-		if nodeModulesDir != "" {
-			rt, err := BundleSharedRuntime(nodeModulesDir, modules)
-			if err != nil {
-				return fmt.Errorf("building shared runtime: %w", err)
-			}
-			r.SetSharedRuntime(rt)
+	if r.SharedRuntime() == "" && nodeModulesDir != "" {
+		rt, err := BundleSharedRuntime(nodeModulesDir, modules)
+		if err != nil {
+			return fmt.Errorf("building shared runtime: %w", err)
 		}
+		r.SetSharedRuntime(rt)
 	}
 
-	modules = RewriteModuleImports(modules)
+	modules = RewriteModuleImports(modules, externals)
 
 	for _, source := range modules {
 		if tagName, ok := discoverTagNameFast(source); ok {

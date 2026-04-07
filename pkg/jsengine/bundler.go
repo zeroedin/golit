@@ -60,33 +60,135 @@ type BundleOptions struct {
 	SharedRuntime bool
 
 	// ExternalPackages lists package specifiers to mark as external.
-	// Only used when SharedRuntime is true. If empty when SharedRuntime
-	// is set, a default list of common Lit packages is used.
+	// Discovered via DiscoverExternalPackages and passed to
+	// BundleComponentModule(s) so shared deps stay as import statements.
 	ExternalPackages []string
 }
 
-// defaultExternalPackages are the shared deps that go into the runtime module.
-var defaultExternalPackages = []string{
-	"lit",
-	"lit/*",
-	"lit-html",
-	"lit-html/*",
-	"lit-element/*",
-	"@lit/reactive-element",
-	"@lit/reactive-element/*",
-	"@lit/context",
-	"@lit/context/*",
-	"@lit-labs/ssr-dom-shim",
-	"@lit-labs/ssr-dom-shim/*",
-	"@lit-labs/ssr-client/*",
-	"tslib",
-	"@patternfly/pfe-core",
-	"@patternfly/pfe-core/*",
-	"@rhds/elements/lib/*",
-	"@rhds/tokens",
-	"@rhds/tokens/*",
-	"@rhds/icons",
-	"@rhds/icons/*",
+// DiscoverExternalPackages runs esbuild with Metafile enabled on all
+// component entry points to discover which node_modules packages they
+// depend on. Returns esbuild-compatible external patterns (pkg + pkg/*).
+func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, opts ...BundleOptions) ([]string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	sp, cp, _, err := ensureShimDir()
+	if err != nil {
+		return nil, fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	type entry struct {
+		absPath string
+		key     string
+	}
+	entries := make([]entry, 0, len(componentPaths))
+	for _, p := range componentPaths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			continue
+		}
+		key := fmt.Sprintf("disc_%d", len(entries))
+		entries = append(entries, entry{absPath: absPath, key: key})
+	}
+
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	_, _, sd, err := ensureShimDir()
+	if err != nil {
+		return nil, fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	esbuildEntries := make([]api.EntryPoint, len(entries))
+	for i, e := range entries {
+		esbuildEntries[i] = api.EntryPoint{
+			InputPath:  e.absPath,
+			OutputPath: e.key,
+		}
+	}
+
+	result := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: esbuildEntries,
+		Bundle:              true,
+		Format:              api.FormatESModule,
+		Target:              api.ES2022,
+		Platform:            api.PlatformNeutral,
+		Inject:              []string{sp, cp},
+		Metafile:            true,
+		Write:               false,
+		Outdir:              sd,
+		NodePaths:           []string{nodeModulesDir},
+		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:             buildPlugins(opt),
+		Conditions:          []string{"node"},
+		LogLevel:            api.LogLevelSilent,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return nil, fmt.Errorf("esbuild discovery errors: %s", strings.Join(msgs, "; "))
+	}
+
+	return parseMetafilePackages(result.Metafile)
+}
+
+// parseMetafilePackages extracts node_modules package names from esbuild
+// metafile JSON and returns esbuild external patterns (pkg + pkg/*).
+func parseMetafilePackages(metafile string) ([]string, error) {
+	var meta struct {
+		Inputs map[string]json.RawMessage `json:"inputs"`
+	}
+	if err := json.Unmarshal([]byte(metafile), &meta); err != nil {
+		return nil, fmt.Errorf("parsing metafile: %w", err)
+	}
+
+	pkgs := make(map[string]bool)
+	for inputPath := range meta.Inputs {
+		pkg := extractNodeModulesPackage(inputPath)
+		if pkg != "" {
+			pkgs[pkg] = true
+		}
+	}
+
+	patterns := make([]string, 0, len(pkgs)*2)
+	for pkg := range pkgs {
+		patterns = append(patterns, pkg, pkg+"/*")
+	}
+	sort.Strings(patterns)
+	return patterns, nil
+}
+
+// extractNodeModulesPackage extracts the package name from a path that
+// goes through node_modules. Returns "" if the path is not from node_modules.
+// Handles scoped packages (@scope/pkg) and unscoped (pkg).
+func extractNodeModulesPackage(inputPath string) string {
+	const marker = "node_modules/"
+	idx := strings.LastIndex(inputPath, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := inputPath[idx+len(marker):]
+	if rest == "" {
+		return ""
+	}
+
+	parts := strings.SplitN(rest, "/", 3)
+	if strings.HasPrefix(parts[0], "@") {
+		if len(parts) < 2 {
+			return parts[0]
+		}
+		return parts[0] + "/" + parts[1]
+	}
+	return parts[0]
 }
 
 // BundleComponent uses esbuild to bundle a Lit component source file
@@ -659,18 +761,13 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 	nodeModulesDir := findNodeModules(absPath)
 	sourceDir := filepath.Dir(absPath)
 
-	externals := opt.ExternalPackages
-	if len(externals) == 0 {
-		externals = defaultExternalPackages
-	}
-
 	result := api.Build(api.BuildOptions{
 		EntryPoints:      []string{absPath},
 		Bundle:           true,
 		Format:           api.FormatESModule,
 		Target:           api.ES2022,
 		Platform:         api.PlatformNeutral,
-		External:         externals,
+		External:         opt.ExternalPackages,
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
@@ -738,11 +835,6 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 
 	nodeModulesDir := findNodeModules(entries[0].absPath)
 
-	externals := opt.ExternalPackages
-	if len(externals) == 0 {
-		externals = defaultExternalPackages
-	}
-
 	esbuildEntries := make([]api.EntryPoint, len(entries))
 	keyToPath := make(map[string]string, len(entries))
 	for i, e := range entries {
@@ -759,7 +851,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		Format:              api.FormatESModule,
 		Target:              api.ES2022,
 		Platform:            api.PlatformNeutral,
-		External:            externals,
+		External:            opt.ExternalPackages,
 		Write:               false,
 		Outdir:              sd,
 		MinifyWhitespace:    opt.Minify,
@@ -793,21 +885,18 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 }
 
 // RewriteModuleImports rewrites import specifiers for shared packages
-// in all module sources to "@golit/runtime". Call this after
+// in all module sources to "@golit/runtime". The externals list determines
+// which specifiers are considered shared. Call this after
 // extractExternalImports if you need the raw specifiers for runtime building.
-func RewriteModuleImports(modules map[string]string) map[string]string {
+func RewriteModuleImports(modules map[string]string, externals []string) map[string]string {
 	rewritten := make(map[string]string, len(modules))
 	for k, v := range modules {
-		rewritten[k] = rewriteImportsToRuntime(v)
+		rewritten[k] = rewriteImportsToRuntime(v, externals)
 	}
 	return rewritten
 }
 
-// rewriteImportsToRuntime replaces import specifiers for shared packages
-// with "@golit/runtime" so they resolve to the pre-loaded shared module.
-func rewriteImportsToRuntime(code string) string {
-	// Match: import ... from "package" or import ... from 'package'
-	// and rewrite the specifier to @golit/runtime for known shared packages.
+func rewriteImportsToRuntime(code string, externals []string) string {
 	lines := strings.Split(code, "\n")
 	var b strings.Builder
 	b.Grow(len(code))
@@ -819,11 +908,11 @@ func rewriteImportsToRuntime(code string) string {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "import ") {
 			if strings.Contains(trimmed, " from ") {
-				if rewritten, ok := rewriteImportLine(line); ok {
+				if rewritten, ok := rewriteImportLine(line, externals); ok {
 					b.WriteString(rewritten)
 					continue
 				}
-			} else if rewritten, ok := rewriteSideEffectImport(line); ok {
+			} else if rewritten, ok := rewriteSideEffectImport(line, externals); ok {
 				b.WriteString(rewritten)
 				continue
 			}
@@ -834,8 +923,7 @@ func rewriteImportsToRuntime(code string) string {
 	return b.String()
 }
 
-func rewriteImportLine(line string) (string, bool) {
-	// Find the "from" keyword and the quoted specifier after it.
+func rewriteImportLine(line string, externals []string) (string, bool) {
 	fromIdx := strings.LastIndex(line, " from ")
 	if fromIdx < 0 {
 		return "", false
@@ -857,14 +945,13 @@ func rewriteImportLine(line string) (string, bool) {
 	}
 	specifier := specPart[1 : 1+endQuote]
 
-	if isSharedPackage(specifier) {
+	if matchesExternals(specifier, externals) {
 		return line[:fromIdx] + " from " + string(quote) + "@golit/runtime" + string(quote) + ";", true
 	}
 	return "", false
 }
 
-// rewriteSideEffectImport handles bare import "module" statements (no from).
-func rewriteSideEffectImport(line string) (string, bool) {
+func rewriteSideEffectImport(line string, externals []string) (string, bool) {
 	trimmed := strings.TrimSpace(line)
 	trimmed = strings.TrimPrefix(trimmed, "import ")
 	trimmed = strings.TrimSuffix(trimmed, ";")
@@ -883,16 +970,14 @@ func rewriteSideEffectImport(line string) (string, bool) {
 	}
 	specifier := trimmed[1 : 1+endQuote]
 
-	if isSharedPackage(specifier) {
-		// Side-effect imports of shared packages are already in the runtime;
-		// remove them since the runtime module handles initialization.
+	if matchesExternals(specifier, externals) {
 		return "/* side-effect import included in @golit/runtime: " + specifier + " */", true
 	}
 	return "", false
 }
 
-func isSharedPackage(specifier string) bool {
-	for _, pkg := range defaultExternalPackages {
+func matchesExternals(specifier string, externals []string) bool {
+	for _, pkg := range externals {
 		if strings.HasSuffix(pkg, "/*") {
 			prefix := strings.TrimSuffix(pkg, "/*")
 			if specifier == prefix || strings.HasPrefix(specifier, prefix+"/") {
