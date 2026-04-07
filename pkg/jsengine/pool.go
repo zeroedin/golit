@@ -42,12 +42,20 @@ func NewEnginePool(size int) (*EnginePool, error) {
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
 
-	// Bundle dynamic import targets (e.g. CSS modules) as preloaded modules.
-	// These are specifiers found in thin module import() calls that need to
-	// be resolvable at runtime.
+	// Bundle dynamic import targets that aren't already in preloadModules.
+	// When called from transform.go, targets are pre-bundled and passed via
+	// preloadBundles/preloadModules. When called from serve.go, this is the
+	// only place they get bundled.
+	already := make(map[string]bool, len(preloadModules))
+	for _, m := range preloadModules {
+		already[m] = true
+	}
 	var dynamicBundles []string
 	allPreloadModules := append([]string(nil), preloadModules...)
 	for _, target := range registry.DynamicImportTargets() {
+		if already[target] {
+			continue
+		}
 		modPath, err := ResolveModulePath(target, ".")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "golit: warning: cannot resolve dynamic import target %s: %v\n", target, err)
