@@ -288,14 +288,14 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle Lit components for SSR. With `--shared-runtime` (recommended), produces a shared runtime module (`_runtime.golit.module.js`) containing Lit, `@lit/context`, and other common dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
+Pre-bundle Lit components for SSR. With `--shared-runtime` (recommended), automatically discovers which `node_modules` packages the components depend on, produces a shared runtime module (`_runtime.golit.module.js`) containing all shared dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
 
 ```bash
 golit bundle --shared-runtime <src-dir/> [--out <bundles-dir/>] [--minify]
 golit bundle <source.ts|js> [--out <file>] [--minify]
 ```
 
-The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate Lit classes and decorator state across components.
+The three-pass build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
 
 ### `golit render`
 
@@ -392,7 +392,7 @@ Instant paint -> Lit hydrates -> Interactive
 
 golit uses three key technologies:
 
-- **esbuild** (Go-native) -- Produces a shared runtime module (Lit + context + reactive-element + tslib) and thin per-component ES modules. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
+- **esbuild** (Go-native) -- Three-pass build: (1) discovers shared dependencies via Metafile analysis, (2) produces thin per-component ES modules with shared deps as external imports, (3) bundles the shared runtime from the discovered dependency graph. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
 - **QJS** (QuickJS via WebAssembly/Wazero) -- Loads the shared runtime module once via `JS_SetModuleLoaderFunc`, then evaluates thin component modules that import from it. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
 - **golang.org/x/net/html** -- Parses and transforms HTML documents, inserting Declarative Shadow DOM templates.
 
