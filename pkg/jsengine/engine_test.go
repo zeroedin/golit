@@ -1,8 +1,11 @@
 package jsengine
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/fastschema/qjs"
 )
 
 func bundleMyGreeting(t *testing.T) string {
@@ -355,5 +358,55 @@ func TestEngine_RenderElement_WithRender_HasDigestMarkers(t *testing.T) {
 	}
 	if !strings.Contains(result.HTML, "<!--/lit-part-->") {
 		t.Errorf("expected <!--/lit-part--> closing marker in HTML, got: %q", result.HTML[:min(200, len(result.HTML))])
+	}
+}
+
+func TestBundleStandaloneModule_DefaultExport(t *testing.T) {
+	esm, err := BundleStandaloneModule("../../testdata/sources/css-module.js")
+	if err != nil {
+		t.Fatalf("bundling standalone module: %v", err)
+	}
+
+	if !strings.Contains(esm, "export") {
+		t.Error("standalone module should preserve ESM exports")
+	}
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+
+	if err := engine.LoadModule("test-css-module", esm); err != nil {
+		t.Fatalf("loading module: %v", err)
+	}
+
+	script := `
+		import mod from "test-css-module";
+		globalThis.__testResult = JSON.stringify({
+			hasDefault: mod !== undefined,
+			cssText: mod ? mod.cssText : "",
+		});
+	`
+	if _, err := engine.ctx.Eval("test-import.js", qjs.Code(script), qjs.TypeModule()); err != nil {
+		t.Fatalf("eval module: %v", err)
+	}
+	result, err := engine.ctx.Eval("read-result.js", qjs.Code(`globalThis.__testResult`))
+	if err != nil {
+		t.Fatalf("eval: %v", err)
+	}
+
+	var output struct {
+		HasDefault bool   `json:"hasDefault"`
+		CSSText    string `json:"cssText"`
+	}
+	if err := json.Unmarshal([]byte(result.String()), &output); err != nil {
+		t.Fatalf("parsing result: %v (raw: %s)", err, result.String())
+	}
+	if !output.HasDefault {
+		t.Fatal("standalone module default export was not accessible via import")
+	}
+	if !strings.Contains(output.CSSText, "color: red") {
+		t.Errorf("expected cssText to contain 'color: red', got: %q", output.CSSText)
 	}
 }

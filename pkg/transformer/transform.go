@@ -168,27 +168,6 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 		}
 	}
 
-	// Bundle dynamic import targets from thin modules as preloaded modules.
-	for _, target := range registry.DynamicImportTargets() {
-		modPath, err := jsengine.ResolveModulePath(target, dir)
-		if err != nil {
-			if opts.Verbose {
-				fmt.Fprintf(os.Stderr, "golit: warning: could not resolve dynamic import target %s: %v\n", target, err)
-			}
-			continue
-		}
-		bundle, err := jsengine.BundlePreload(modPath, target)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "golit: warning: could not bundle dynamic import target %s: %v\n", target, err)
-			continue
-		}
-		preloadBundles = append(preloadBundles, bundle)
-		opts.Preload = append(opts.Preload, target)
-		if opts.Verbose {
-			fmt.Fprintf(os.Stderr, "golit: preloaded dynamic import target %s\n", target)
-		}
-	}
-
 	// ── Pass 1: Discovery (sequential) ──────────────────────────────
 	// Read files once and cache their contents so the render pass
 	// doesn't need to re-read them from disk. Collect all source paths

@@ -229,6 +229,8 @@ func (e *Engine) shimDynamicImports(code string) string {
 
 // shimRuntimeImport checks if a dynamic import() at the given position
 // matches a runtime external package and rewrites it to import("@golit/runtime").
+// Skips specifiers that have a standalone module registered (e.loaded),
+// allowing QJS native module resolution to handle them instead.
 func (e *Engine) shimRuntimeImport(code string, matchStart int) (string, int) {
 	for _, quote := range []byte{'"', '\''} {
 		prefix := `import(` + string(quote)
@@ -242,6 +244,9 @@ func (e *Engine) shimRuntimeImport(code string, matchStart int) (string, int) {
 			continue
 		}
 		specifier := code[matchStart+len(prefix) : matchStart+len(prefix)+end]
+		if e.loaded[specifier] {
+			return "", 0
+		}
 		if matchesExternals(specifier, e.runtimeExternals) {
 			full := code[matchStart : matchStart+len(prefix)+end+len(closeStr)]
 			rewritten := `import(` + string(quote) + `@golit/runtime` + string(quote) + `)/*golit-runtime:` + full + `*/`
@@ -275,6 +280,18 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, err
 
 	if ext := registry.RuntimeExternals(); len(ext) > 0 && len(e.runtimeExternals) == 0 {
 		e.runtimeExternals = ext
+	}
+
+	if !e.loaded["@golit/dynamic-modules"] {
+		for specifier, modSource := range registry.DynamicModules() {
+			if !e.loaded[specifier] {
+				if err := e.LoadModule(specifier, modSource); err != nil {
+					return false, fmt.Errorf("loading dynamic module %s for <%s>: %w", specifier, tagName, err)
+				}
+				e.loaded[specifier] = true
+			}
+		}
+		e.loaded["@golit/dynamic-modules"] = true
 	}
 
 	if err := e.EvalModule(tagName+".js", source); err != nil {

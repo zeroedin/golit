@@ -427,6 +427,13 @@ func buildPlugins(opt BundleOptions) []api.Plugin {
 	}
 }
 
+// BundleStandaloneModule bundles a module file into a self-contained ES module
+// with exports preserved. Used for registering dynamic import targets as named
+// QJS modules so import("specifier") resolves natively.
+func BundleStandaloneModule(modulePath string) (string, error) {
+	return bundleComponentRaw(modulePath, BundleOptions{})
+}
+
 // BundleSource bundles a component from inline JS/TS source code (no file on disk).
 // Uses esbuild's Stdin option instead of EntryPoints.
 func BundleSource(source string, opts ...BundleOptions) (string, error) {
@@ -859,9 +866,27 @@ func rewriteImportLine(line string, externals []string) (string, bool) {
 	specifier := specPart[1 : 1+endQuote]
 
 	if matchesExternals(specifier, externals) {
+		if isDefaultImport(line[:fromIdx]) {
+			return "", false
+		}
 		return line[:fromIdx] + " from " + string(quote) + "@golit/runtime" + string(quote) + ";", true
 	}
 	return "", false
+}
+
+// isDefaultImport checks if the import clause is a default import
+// (e.g. "import styles" or "import foo, { bar }").
+func isDefaultImport(importClause string) bool {
+	trimmed := strings.TrimSpace(importClause)
+	trimmed = strings.TrimPrefix(trimmed, "import ")
+	trimmed = strings.TrimSpace(trimmed)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "*") {
+		return false
+	}
+	return true
 }
 
 func rewriteSideEffectImport(line string, externals []string) (string, bool) {
@@ -1019,6 +1044,31 @@ func buildRuntimeEntryFromModules(modules map[string]string) string {
 // Matches patterns like: import("@rhds/tokens/css/default-theme.css.js")
 func ExtractDynamicImportTargets(modules map[string]string) []string {
 	return extractDynamicImportTargets(modules)
+}
+
+// ExtractUnrewrittenImports scans rewritten thin module sources for static
+// imports that still reference external specifiers (not @golit/runtime, not
+// relative). These are default imports that were intentionally not rewritten
+// and need standalone module registration.
+func ExtractUnrewrittenImports(modules map[string]string) []string {
+	seen := make(map[string]bool)
+	var specifiers []string
+
+	for _, source := range modules {
+		for _, line := range strings.Split(source, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "import ") || !strings.Contains(trimmed, " from ") {
+				continue
+			}
+			spec := extractFromSpecifier(trimmed)
+			if spec != "" && !isLocalOrRuntime(spec) && !seen[spec] {
+				seen[spec] = true
+				specifiers = append(specifiers, spec)
+			}
+		}
+	}
+	sort.Strings(specifiers)
+	return specifiers
 }
 
 func extractDynamicImportTargets(modules map[string]string) []string {

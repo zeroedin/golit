@@ -41,57 +41,33 @@ func NewEnginePool(size int) (*EnginePool, error) {
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
-
-	// Bundle dynamic import targets that aren't already in preloadModules.
-	// When called from transform.go, targets are pre-bundled and passed via
-	// preloadBundles/preloadModules. When called from serve.go, this is the
-	// only place they get bundled.
-	already := make(map[string]bool, len(preloadModules))
-	for _, m := range preloadModules {
-		already[m] = true
-	}
-	var dynamicBundles []string
-	allPreloadModules := append([]string(nil), preloadModules...)
-	for _, target := range registry.DynamicImportTargets() {
-		if already[target] {
-			continue
-		}
-		baseDir := registry.BaseDir()
-		if baseDir == "" {
-			baseDir = "."
-		}
-		modPath, err := ResolveModulePath(target, baseDir)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "golit: warning: cannot resolve dynamic import target %s: %v\n", target, err)
-			continue
-		}
-		bundle, err := BundlePreload(modPath, target)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "golit: warning: cannot bundle dynamic import target %s: %v\n", target, err)
-			continue
-		}
-		dynamicBundles = append(dynamicBundles, bundle)
-		allPreloadModules = append(allPreloadModules, target)
-	}
+	runtimeExternals := registry.RuntimeExternals()
+	sharedRuntime := registry.SharedRuntime()
+	dynamicModules := registry.DynamicModules()
 
 	drained := make([]*Engine, 0, p.size)
 
 	for i := 0; i < p.size; i++ {
 		e := <-p.engines
-		e.SetPreloadModules(allPreloadModules)
-		e.SetRuntimeExternals(registry.RuntimeExternals())
+		e.SetPreloadModules(preloadModules)
+		e.SetRuntimeExternals(runtimeExternals)
 		for _, pb := range preloadBundles {
 			_ = e.LoadBundle(pb)
 		}
-		for _, db := range dynamicBundles {
-			_ = e.LoadBundle(db)
-		}
-		// Load shared runtime once per engine before any components.
-		if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
-			if err := e.LoadModule("@golit/runtime", rt); err != nil {
+		if sharedRuntime != "" && !e.loaded["@golit/runtime"] {
+			if err := e.LoadModule("@golit/runtime", sharedRuntime); err != nil {
 				fmt.Fprintf(os.Stderr, "golit: warning: loading shared runtime: %v\n", err)
 			} else {
 				e.loaded["@golit/runtime"] = true
+			}
+		}
+		for specifier, source := range dynamicModules {
+			if !e.loaded[specifier] {
+				if err := e.LoadModule(specifier, source); err != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: loading dynamic module %s: %v\n", specifier, err)
+				} else {
+					e.loaded[specifier] = true
+				}
 			}
 		}
 		for _, tag := range tags {
