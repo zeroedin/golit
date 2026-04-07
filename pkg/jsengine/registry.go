@@ -66,7 +66,7 @@ func NewRegistry() *Registry {
 // LoadDir loads all .golit.module.js files from a directory.
 // If a _runtime.golit.module.js file is present, it is loaded as the shared runtime.
 // Tag names are discovered via a regex pre-pass. Dynamic import() targets in
-// the thin modules are collected to populate runtime externals.
+// the thin modules are collected and stored as dynamic import targets.
 func (r *Registry) LoadDir(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
