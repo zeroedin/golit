@@ -212,40 +212,36 @@ func (e *Engine) shimDynamicImports(code string) string {
 	return b.String()
 }
 
-// LoadBundleForTag loads a bundle from the registry for a specific tag name.
+// LoadBundleForTag loads a component from the registry for a specific tag name.
 // Returns (true, nil) if loaded or already loaded, (false, nil) if the tag
 // is not in the registry, or (false, err) if loading failed.
-// When the registry has a shared runtime module, it is loaded first via
-// LoadModule, and the component is loaded as a thin ES module via EvalModule.
+// When a shared runtime is present, thin ES modules are loaded via EvalModule.
+// Otherwise, content is loaded as a script via LoadBundle (for compiled
+// artifacts and programmatic use via BundleSource).
 func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, error) {
 	if e.loaded[tagName] {
 		return true, nil
 	}
 
-	// If registry has a shared runtime, ensure it's loaded first.
-	if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
-		if err := e.LoadModule("@golit/runtime", rt); err != nil {
-			return false, fmt.Errorf("loading shared runtime: %w", err)
-		}
-		e.loaded["@golit/runtime"] = true
-	}
-
-	// Try thin module first, fall back to legacy bundle.
-	if mod := registry.LookupModule(tagName); mod != "" {
-		if err := e.EvalModule(tagName+".js", mod); err != nil {
-			return false, fmt.Errorf("loading module for <%s>: %w", tagName, err)
-		}
-		e.loaded[tagName] = true
-		return true, nil
-	}
-
-	bundle := registry.Lookup(tagName)
-	if bundle == "" {
+	source := registry.Lookup(tagName)
+	if source == "" {
 		return false, nil
 	}
 
-	if err := e.LoadBundle(bundle); err != nil {
-		return false, fmt.Errorf("loading bundle for <%s>: %w", tagName, err)
+	if rt := registry.SharedRuntime(); rt != "" {
+		if !e.loaded["@golit/runtime"] {
+			if err := e.LoadModule("@golit/runtime", rt); err != nil {
+				return false, fmt.Errorf("loading shared runtime: %w", err)
+			}
+			e.loaded["@golit/runtime"] = true
+		}
+		if err := e.EvalModule(tagName+".js", source); err != nil {
+			return false, fmt.Errorf("loading module for <%s>: %w", tagName, err)
+		}
+	} else {
+		if err := e.LoadBundle(source); err != nil {
+			return false, fmt.Errorf("loading bundle for <%s>: %w", tagName, err)
+		}
 	}
 
 	e.loaded[tagName] = true

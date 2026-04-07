@@ -13,18 +13,32 @@ func setupRendererBundles(t *testing.T) string {
 	t.Helper()
 	bundleDir := t.TempDir()
 
-	for _, src := range []string{
+	sources := []string{
 		"testdata/sources/my-greeting.js",
 		"testdata/sources/my-card.ts",
-	} {
-		bundle, err := jsengine.BundleComponent(src)
+	}
+
+	nodeModulesDir := jsengine.FindNodeModules(sources[0])
+	if nodeModulesDir != "" {
+		rt, err := jsengine.BundleSharedRuntime(nodeModulesDir)
 		if err != nil {
-			t.Fatalf("bundling %s: %v", src, err)
+			t.Fatalf("building shared runtime: %v", err)
 		}
-		base := filepath.Base(src)
+		if err := jsengine.SaveBundle(rt, filepath.Join(bundleDir, "_runtime.golit.module.js")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	modules, err := jsengine.BundleComponentModules(sources)
+	if err != nil {
+		t.Fatalf("bundling modules: %v", err)
+	}
+
+	for srcPath, mod := range modules {
+		base := filepath.Base(srcPath)
 		ext := filepath.Ext(base)
-		outName := strings.TrimSuffix(base, ext) + ".golit.bundle.js"
-		if err := jsengine.SaveBundle(bundle, filepath.Join(bundleDir, outName)); err != nil {
+		outName := strings.TrimSuffix(base, ext) + ".golit.module.js"
+		if err := jsengine.SaveBundle(mod, filepath.Join(bundleDir, outName)); err != nil {
 			t.Fatal(err)
 		}
 	}
