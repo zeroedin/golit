@@ -14,7 +14,7 @@ import (
 )
 
 // defineRe extracts custom element tag names from customElements.define() calls
-// without executing the bundle. Valid custom element names must contain a hyphen.
+// without executing the module. Valid custom element names must contain a hyphen.
 var defineRe = regexp.MustCompile(`customElements\s*\.\s*define\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
 
 // decoratorDefineRe matches the Lit @customElement decorator pattern used in
@@ -36,12 +36,13 @@ type Registry struct {
 	// unregistered tracks custom element tags found but not in the registry
 	unregistered map[string]bool
 
-	// processedPaths tracks source file paths that have already been bundled,
-	// so discoverFromHTML can skip re-bundling across multiple HTML files.
+	// processedPaths tracks source file paths that have already been processed,
+	// so discoverFromHTML can skip re-processing across multiple HTML files.
 	processedPaths map[string]bool
 }
 
-// NewRegistry creates an empty bundle registry.
+// NewRegistry creates an empty registry for component modules and optional
+// shared runtime state.
 func NewRegistry() *Registry {
 	return &Registry{
 		modules:        make(map[string]string),
