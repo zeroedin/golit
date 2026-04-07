@@ -374,9 +374,10 @@ HTML with import map + module scripts
     | golit transform
     | 1. Parse HTML, find <script type="importmap"> and <script type="module">
     | 2. Resolve bare-module specifiers to file paths via import map
-    | 3. Load shared runtime module (@golit/runtime) into QJS once
-    | 4. Load thin component modules (import from shared runtime)
-    | 5. For each custom element in HTML:
+    | 3. Discover shared dependencies, build thin ES modules + shared runtime
+    | 4. Load shared runtime (@golit/runtime) into QJS once
+    | 5. Load thin component modules (import from shared runtime)
+    | 6. For each custom element in HTML:
     |    a. Instantiate component, set attributes, call render()
     |    b. Collect rendered HTML + CSS
     |    c. Wrap in <template shadowroot="open" shadowrootmode="open">

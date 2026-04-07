@@ -118,14 +118,35 @@ func discoverFromHTML(htmlContent string, htmlDir string, siteRoot string, regis
 		return
 	}
 
-	bundles, err := jsengine.BundleComponents(localPaths)
+	nodeModulesDir := jsengine.FindNodeModules(localPaths[0])
+
+	externals, err := jsengine.DiscoverExternalPackages(localPaths, nodeModulesDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "  golit: warning: batch bundle failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "  golit: warning: external discovery failed: %v\n", err)
 		return
 	}
 
-	for path, bundle := range bundles {
-		tagName, err := jsengine.DiscoverTagName(bundle)
+	modules, err := jsengine.BundleComponentModules(localPaths, jsengine.BundleOptions{
+		ExternalPackages: externals,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "  golit: warning: batch module build failed: %v\n", err)
+		return
+	}
+
+	if registry.SharedRuntime() == "" && nodeModulesDir != "" {
+		rt, rtErr := jsengine.BundleSharedRuntime(nodeModulesDir, modules)
+		if rtErr != nil {
+			fmt.Fprintf(os.Stderr, "  golit: warning: shared runtime build failed: %v\n", rtErr)
+		} else {
+			registry.SetSharedRuntime(rt)
+		}
+	}
+
+	modules = jsengine.RewriteModuleImports(modules, externals)
+
+	for path, mod := range modules {
+		tagName, err := jsengine.DiscoverTagName(mod)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  golit: warning: could not discover tag in %s: %v\n", path, err)
 			registry.MarkPath(path)
@@ -133,7 +154,7 @@ func discoverFromHTML(htmlContent string, htmlDir string, siteRoot string, regis
 		}
 
 		if !registry.Has(tagName) {
-			registry.Register(tagName, bundle)
+			registry.RegisterModule(tagName, mod)
 			fmt.Fprintf(os.Stderr, "  golit: auto-discovered <%s> from %s\n", tagName, path)
 		}
 		registry.MarkPath(path)
