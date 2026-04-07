@@ -1059,29 +1059,37 @@ func extractDynamicImportTargets(modules map[string]string) []string {
 	return targets
 }
 
-// ResolveModulePath resolves a bare module specifier to a file path by
-// looking up its entry point in node_modules/package.json.
+// ResolveModulePath resolves a module specifier to a file path.
+// Handles bare package names (e.g. "lit"), scoped packages ("@rhds/tokens"),
+// and subpath specifiers ("@rhds/tokens/css/default-theme.css.js").
 func ResolveModulePath(specifier string, fromDir string) (string, error) {
-	// If it's already a path, return as-is
 	if strings.HasPrefix(specifier, ".") || strings.HasPrefix(specifier, "/") {
 		return filepath.Abs(specifier)
 	}
 
-	// Find node_modules
 	nmDir := findNodeModules(filepath.Join(fromDir, "dummy"))
 	if nmDir == "" {
 		return "", fmt.Errorf("node_modules not found from %s", fromDir)
 	}
 
-	pkgDir := filepath.Join(nmDir, specifier)
+	// Try the specifier as a direct file path under node_modules first.
+	// This handles subpath specifiers like "@rhds/tokens/css/default-theme.css.js"
+	// or "prism-esm/components/prism-css.js".
+	directPath := filepath.Join(nmDir, specifier)
+	if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
+		return directPath, nil
+	}
+
+	// Extract the package name for package.json lookup.
+	pkgName := extractPackageName(specifier)
+	pkgDir := filepath.Join(nmDir, pkgName)
 	pkgJSON := filepath.Join(pkgDir, "package.json")
 
 	data, err := os.ReadFile(pkgJSON)
 	if err != nil {
-		// No package.json — try index.js or specifier.js directly
 		for _, candidate := range []string{
 			filepath.Join(pkgDir, "index.js"),
-			filepath.Join(pkgDir, specifier+".js"),
+			filepath.Join(pkgDir, pkgName+".js"),
 		} {
 			if _, err := os.Stat(candidate); err == nil {
 				return candidate, nil
@@ -1090,10 +1098,9 @@ func ResolveModulePath(specifier string, fromDir string) (string, error) {
 		return "", fmt.Errorf("cannot resolve module %q: %w", specifier, err)
 	}
 
-	// Parse package.json for "module", "main", or "exports" entry
 	type PkgJSON struct {
-		Module  string `json:"module"`
-		Main    string `json:"main"`
+		Module string `json:"module"`
+		Main   string `json:"main"`
 	}
 	var pkg PkgJSON
 	if err := json.Unmarshal(data, &pkg); err != nil {
@@ -1113,6 +1120,20 @@ func ResolveModulePath(specifier string, fromDir string) (string, error) {
 		return "", fmt.Errorf("module entry %s not found", resolved)
 	}
 	return resolved, nil
+}
+
+// extractPackageName returns the npm package name from a specifier.
+// Handles scoped packages: "@scope/pkg/sub/path" -> "@scope/pkg"
+// and unscoped: "pkg/sub/path" -> "pkg"
+func extractPackageName(specifier string) string {
+	parts := strings.SplitN(specifier, "/", 3)
+	if strings.HasPrefix(parts[0], "@") {
+		if len(parts) >= 2 {
+			return parts[0] + "/" + parts[1]
+		}
+		return parts[0]
+	}
+	return parts[0]
 }
 
 // SaveBundle writes a bundle string to a file atomically.

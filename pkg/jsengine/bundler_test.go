@@ -93,6 +93,54 @@ func TestExtractDynamicImportTargets(t *testing.T) {
 	}
 }
 
+func TestExtractPackageName(t *testing.T) {
+	cases := []struct {
+		specifier string
+		want      string
+	}{
+		{"lit", "lit"},
+		{"lit/decorators.js", "lit"},
+		{"@rhds/tokens", "@rhds/tokens"},
+		{"@rhds/tokens/css/default-theme.css.js", "@rhds/tokens"},
+		{"prism-esm/components/prism-css.js", "prism-esm"},
+		{"@rhds/elements/rh-icon/rh-icon.js", "@rhds/elements"},
+		{"@scope", "@scope"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.specifier, func(t *testing.T) {
+			got := extractPackageName(tc.specifier)
+			if got != tc.want {
+				t.Errorf("extractPackageName(%q) = %q, want %q", tc.specifier, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveModulePath_SubpathSpecifier(t *testing.T) {
+	// This test requires node_modules to exist. Use the hugo-rhds example
+	// if available, otherwise skip.
+	nmDir := FindNodeModules("../../examples/hugo-rhds/dummy")
+	if nmDir == "" {
+		t.Skip("node_modules not found in hugo-rhds example")
+	}
+
+	resolved, err := ResolveModulePath("@rhds/tokens/css/default-theme.css.js", "../../examples/hugo-rhds")
+	if err != nil {
+		t.Fatalf("expected subpath to resolve, got: %v", err)
+	}
+	if !strings.Contains(resolved, "default-theme.css.js") {
+		t.Errorf("resolved path %q should contain default-theme.css.js", resolved)
+	}
+
+	resolved, err = ResolveModulePath("prism-esm/prism.js", "../../examples/hugo-rhds")
+	if err != nil {
+		t.Fatalf("expected prism-esm subpath to resolve, got: %v", err)
+	}
+	if !strings.Contains(resolved, "prism.js") {
+		t.Errorf("resolved path %q should contain prism.js", resolved)
+	}
+}
+
 func TestDiscoverExternalPackages_NonFatalErrors(t *testing.T) {
 	// DiscoverExternalPackages with no valid entry points should return nil, nil
 	// (not an error) since there's nothing to discover.
