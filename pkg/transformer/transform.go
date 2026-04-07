@@ -280,14 +280,14 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	return result, nil
 }
 
-func initEngine(preloadBundles []string, preloadModules []string, runtimeExternals ...[]string) (*jsengine.Engine, error) {
+func initEngine(preloadBundles []string, preloadModules []string, runtimeExternals []string) (*jsengine.Engine, error) {
 	engine, err := jsengine.NewEngine()
 	if err != nil {
 		return nil, err
 	}
 	engine.SetPreloadModules(preloadModules)
 	if len(runtimeExternals) > 0 {
-		engine.SetRuntimeExternals(runtimeExternals[0])
+		engine.SetRuntimeExternals(runtimeExternals)
 	}
 	for _, pb := range preloadBundles {
 		if err := engine.LoadBundle(pb); err != nil {
