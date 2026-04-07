@@ -84,6 +84,8 @@ var defaultExternalPackages = []string{
 	"@rhds/elements/lib/*",
 	"@rhds/tokens",
 	"@rhds/tokens/*",
+	"@rhds/icons",
+	"@rhds/icons/*",
 }
 
 // BundleComponent uses esbuild to bundle a Lit component source file
@@ -929,6 +931,8 @@ var runtimeEntrySpecifiers = []string{
 	"@rhds/elements/lib/context/headings/consumer.js",
 	"@rhds/elements/lib/context/headings/provider.js",
 	"@rhds/tokens/media.js",
+	"@rhds/icons",
+	"@rhds/icons/icons.js",
 }
 
 // runtimeSideEffectSpecifiers are imported for side-effects only (no exports).
