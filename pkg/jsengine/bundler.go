@@ -126,13 +126,14 @@ func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, op
 	})
 
 	if len(result.Errors) > 0 {
-		var msgs []string
 		for _, e := range result.Errors {
-			msgs = append(msgs, e.Text)
+			fmt.Fprintf(os.Stderr, "golit: warning: discovery: %s\n", e.Text)
 		}
-		return nil, fmt.Errorf("esbuild discovery errors: %s", strings.Join(msgs, "; "))
 	}
 
+	if result.Metafile == "" {
+		return nil, nil
+	}
 	return parseMetafilePackages(result.Metafile)
 }
 
