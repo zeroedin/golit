@@ -632,10 +632,13 @@ func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts 
 	return string(result.OutputFiles[0].Contents), nil
 }
 
-// BundleComponentModule produces a thin ES module for a component with shared
+// BundleComponentModule produces an ES module for a component with shared
 // dependencies marked as external. The output keeps import/export statements
-// so it can be loaded via Engine.EvalModule. Import specifiers for shared deps
-// are rewritten to "@golit/runtime".
+// so it can be loaded via Engine.EvalModule. Callers should use
+// RewriteModuleImports to rewrite external specifiers to "@golit/runtime"
+// after extracting import specifiers for runtime building.
+// The domshim and template collector are injected so the module works
+// both with and without a shared runtime.
 func BundleComponentModule(componentPath string, opts ...BundleOptions) (string, error) {
 	opt := BundleOptions{}
 	if len(opts) > 0 {
@@ -653,6 +656,11 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		return "", fmt.Errorf("component file not found: %s", absPath)
 	}
 
+	sp, cp, _, err := ensureShimDir()
+	if err != nil {
+		return "", fmt.Errorf("preparing shim files: %w", err)
+	}
+
 	nodeModulesDir := findNodeModules(absPath)
 	sourceDir := filepath.Dir(absPath)
 
@@ -663,6 +671,7 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		Target:           api.ES2022,
 		Platform:         api.PlatformNeutral,
 		External:         opt.ExternalPackages,
+		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
@@ -722,7 +731,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		return nil, nil
 	}
 
-	_, _, sd, err := ensureShimDir()
+	sp, cp, sd, err := ensureShimDir()
 	if err != nil {
 		return nil, fmt.Errorf("preparing shim files: %w", err)
 	}
@@ -746,6 +755,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		Target:              api.ES2022,
 		Platform:            api.PlatformNeutral,
 		External:            opt.ExternalPackages,
+		Inject:              []string{sp, cp},
 		Write:               false,
 		Outdir:              sd,
 		MinifyWhitespace:    opt.Minify,
