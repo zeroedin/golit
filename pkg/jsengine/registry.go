@@ -41,9 +41,14 @@ type Registry struct {
 
 	// dynamicImportTargets lists specific module specifiers that appear in
 	// dynamic import() calls in thin modules (e.g. "@rhds/tokens/css/default-theme.css.js").
-	// These need to be bundled as standalone preloaded modules so the engine
+	// These need to be bundled as standalone modules so the engine
 	// can resolve them at runtime.
 	dynamicImportTargets []string
+
+	// dynamicModules maps specifier -> raw ESM source for modules that
+	// need to be registered in QJS under their original specifier name
+	// so dynamic import() calls resolve natively.
+	dynamicModules map[string]string
 
 	// baseDir is the directory from which modules were loaded, used to
 	// resolve dynamic import targets relative to the correct node_modules.
@@ -115,6 +120,18 @@ func (r *Registry) LoadDir(dir string) error {
 		targets := extractDynamicImportTargets(moduleSources)
 		if len(targets) > 0 {
 			r.SetDynamicImportTargets(targets)
+			for _, target := range targets {
+				modPath, err := ResolveModulePath(target, absDir)
+				if err != nil {
+					continue
+				}
+				esm, err := BundleStandaloneModule(modPath)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: could not bundle dynamic module %s: %v\n", target, err)
+					continue
+				}
+				r.SetDynamicModule(target, esm)
+			}
 		}
 	}
 
@@ -204,6 +221,31 @@ func (r *Registry) DynamicImportTargets() []string {
 func (r *Registry) SetDynamicImportTargets(targets []string) {
 	r.mu.Lock()
 	r.dynamicImportTargets = targets
+	r.mu.Unlock()
+}
+
+// DynamicModules returns a copy of the specifier -> ESM source map for
+// modules that should be registered as named QJS modules.
+func (r *Registry) DynamicModules() map[string]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.dynamicModules == nil {
+		return nil
+	}
+	cp := make(map[string]string, len(r.dynamicModules))
+	for k, v := range r.dynamicModules {
+		cp[k] = v
+	}
+	return cp
+}
+
+// SetDynamicModule registers a standalone ES module under its specifier name.
+func (r *Registry) SetDynamicModule(specifier, source string) {
+	r.mu.Lock()
+	if r.dynamicModules == nil {
+		r.dynamicModules = make(map[string]string)
+	}
+	r.dynamicModules[specifier] = source
 	r.mu.Unlock()
 }
 

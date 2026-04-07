@@ -427,6 +427,13 @@ func buildPlugins(opt BundleOptions) []api.Plugin {
 	}
 }
 
+// BundleStandaloneModule bundles a module file into a self-contained ES module
+// with exports preserved. Used for registering dynamic import targets as named
+// QJS modules so import("specifier") resolves natively.
+func BundleStandaloneModule(modulePath string) (string, error) {
+	return bundleComponentRaw(modulePath, BundleOptions{})
+}
+
 // BundleSource bundles a component from inline JS/TS source code (no file on disk).
 // Uses esbuild's Stdin option instead of EntryPoints.
 func BundleSource(source string, opts ...BundleOptions) (string, error) {

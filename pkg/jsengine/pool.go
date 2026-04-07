@@ -94,6 +94,17 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 				e.loaded["@golit/runtime"] = true
 			}
 		}
+		// Register dynamic modules as named QJS modules so native
+		// import("specifier") resolution works for CSS/JS modules.
+		for specifier, source := range registry.DynamicModules() {
+			if !e.loaded[specifier] {
+				if err := e.LoadModule(specifier, source); err != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: loading dynamic module %s: %v\n", specifier, err)
+				} else {
+					e.loaded[specifier] = true
+				}
+			}
+		}
 		for _, tag := range tags {
 			if _, err := e.LoadBundleForTag(tag, registry); err != nil {
 				fmt.Fprintf(os.Stderr, "golit: warning: %v\n", err)
