@@ -265,9 +265,13 @@ function classifyBindings(strings) {
 // Main entry point
 // ============================================================
 
-globalThis.__collectTemplateResult = function collectTemplateResult(value) {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'symbol') return '';
+globalThis.__collectTemplateResult = function collectTemplateResult(value, isRoot) {
+  if (value === null || value === undefined) {
+    return isRoot ? '<!--lit-part--><!--/lit-part-->' : '';
+  }
+  if (typeof value === 'symbol') {
+    return isRoot ? '<!--lit-part--><!--/lit-part-->' : '';
+  }
   if (typeof value === 'string') return escapeHTML(value);
   if (typeof value === 'number') return String(value);
   if (typeof value === 'boolean') return value ? 'true' : '';

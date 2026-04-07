@@ -319,8 +319,9 @@ func (e *Engine) RenderElement(tagName string, attrs map[string]string) (*Render
 
 				let html = '';
 				if (typeof el.render === 'function') {
-					const result = el.render();
-					html = __collectTemplateResult(result);
+					html = __collectTemplateResult(el.render(), true);
+				} else {
+					html = __collectTemplateResult(null, true);
 				}
 
 				let css = '';
@@ -396,7 +397,7 @@ const batchRenderSuffix = `;const results=[];` +
 	`el.setAttribute(key,value);` +
 	`const propName=attributeToProperty(Ctor,key);` +
 	`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
-	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render());}` +
+	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render(),true);}else{html=__collectTemplateResult(null,true);}` +
 	`let css='';if(globalThis.__cssCache.has(Ctor)){css=globalThis.__cssCache.get(Ctor);}` +
 	`else{if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
 	`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
