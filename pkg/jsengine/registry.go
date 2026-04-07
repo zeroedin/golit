@@ -133,6 +133,23 @@ func (r *Registry) LoadDir(dir string) error {
 				r.SetDynamicModule(target, esm)
 			}
 		}
+
+		unrewritten := ExtractUnrewrittenImports(moduleSources)
+		for _, spec := range unrewritten {
+			if r.dynamicModules != nil && r.dynamicModules[spec] != "" {
+				continue
+			}
+			modPath, err := ResolveModulePath(spec, absDir)
+			if err != nil {
+				continue
+			}
+			esm, err := BundleStandaloneModule(modPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "golit: warning: could not bundle standalone module %s: %v\n", spec, err)
+				continue
+			}
+			r.SetDynamicModule(spec, esm)
+		}
 	}
 
 	return nil
@@ -390,6 +407,23 @@ func (r *Registry) LoadSourceDir(dir string) error {
 	}
 
 	modules = RewriteModuleImports(modules, externals)
+
+	// After rewriting, find default imports that kept their original specifier
+	// (not rewritten to @golit/runtime) and bundle them as standalone modules.
+	unrewritten := ExtractUnrewrittenImports(modules)
+	for _, spec := range unrewritten {
+		modPath, err := ResolveModulePath(spec, dir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: could not resolve unrewritten import %s: %v\n", spec, err)
+			continue
+		}
+		esm, err := BundleStandaloneModule(modPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "golit: warning: could not bundle standalone module %s: %v\n", spec, err)
+			continue
+		}
+		r.SetDynamicModule(spec, esm)
+	}
 
 	for _, source := range modules {
 		if tagName, ok := discoverTagNameFast(source); ok {
