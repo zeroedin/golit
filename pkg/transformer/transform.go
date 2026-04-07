@@ -170,9 +170,11 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 
 	// ── Pass 1: Discovery (sequential) ──────────────────────────────
 	// Read files once and cache their contents so the render pass
-	// doesn't need to re-read them from disk.
+	// doesn't need to re-read them from disk. Collect all source paths
+	// across all HTML files, then build the shared runtime + modules once.
 	fileCache := make(map[string][]byte, len(htmlFiles))
 	if autoDiscover || cliImportMap != nil {
+		var discoveredPaths []string
 		for _, filePath := range htmlFiles {
 			data, err := os.ReadFile(filePath)
 			if err != nil {
@@ -180,7 +182,11 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 			}
 			fileCache[filePath] = data
 			htmlDir := filepath.Dir(filePath)
-			discoverFromHTML(string(data), htmlDir, dir, registry, cliImportMap, opts.Verbose)
+			paths := collectSourcePaths(string(data), htmlDir, dir, registry, cliImportMap, opts.Verbose)
+			discoveredPaths = append(discoveredPaths, paths...)
+		}
+		if len(discoveredPaths) > 0 {
+			buildDiscoveredModules(discoveredPaths, registry, opts.Verbose)
 		}
 	}
 

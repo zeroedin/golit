@@ -1,0 +1,9 @@
+transform:
+  importmap: importmap.local.json
+  verbose: true
+  concurrency: true
+  preload:
+    - prism-esm
+  ignore:
+    - rh-audio-player
+    - rh-footer

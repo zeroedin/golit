@@ -6,7 +6,7 @@ SOURCES_DIR := node_modules/@rhds/elements/elements
 
 .PHONY: build bundle hugo serve serve-dev clean golit-build
 
-## bundle: Pre-bundle RHDS components for faster transforms
+## bundle: Pre-bundle RHDS components for SSR
 bundle: golit-build
 	@mkdir -p $(BUNDLES_DIR)
 	$(GOLIT) bundle $(SOURCES_DIR)/ --out $(BUNDLES_DIR)/
@@ -22,6 +22,15 @@ build: bundle hugo
 ## serve: Build then serve the SSR'd output on port 8080
 serve: build
 	@echo "Serving public/ at http://localhost:8080"
+	python3 -m http.server 8080 --directory public
+
+## build-auto: Hugo + golit auto-discovery (no pre-bundle, discovers from HTML import maps)
+build-auto: golit-build hugo
+	$(GOLIT) transform public/ --config golit-auto.yaml
+
+## serve-auto: Auto-discovery build then serve on port 8080
+serve-auto: build-auto
+	@echo "Serving public/ at http://localhost:8080 (auto-discovered)"
 	python3 -m http.server 8080 --directory public
 
 ## serve-dev: Hugo dev server (no SSR, for authoring)

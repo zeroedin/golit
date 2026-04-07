@@ -101,12 +101,37 @@ golit transform public/ --sources node_modules/@rhds/elements/elements/
 
 ### Mode 4: Pre-Bundled
 
-For CI/CD or when you want maximum transform speed, pre-bundle components and point at the bundles directory.
+For CI/CD or when you want maximum transform speed, pre-bundle components and point at the output directory. Bundling a directory automatically discovers shared dependencies, produces a shared runtime module, and thin per-component ES modules.
 
 ```bash
-golit bundle node_modules/@rhds/elements/elements/rh-badge/rh-badge.js --out bundles/
+golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 golit transform public/ --defs bundles/
 ```
+
+### CDN Import Maps vs Local Resolution
+
+golit needs **local files on disk** to bundle components for SSR. If your HTML import map uses CDN URLs (common for production browser delivery), golit cannot resolve those to local source files.
+
+**Two approaches:**
+
+1. **Pre-bundle (recommended for CI/CD):** Use `golit bundle <src-dir/> --out <dir/>` to pre-bundle from `node_modules/` directly. Then use `--defs <dir/>` at transform time. The import map in your HTML is irrelevant to golit — esbuild resolves everything from `node_modules/`.
+
+2. **Local import map (for auto-discovery):** Keep the CDN import map in your HTML for the browser, but provide a separate local import map via `--importmap` (or `importmap:` in golit.yaml) that maps the same specifiers to `node_modules/` paths:
+
+   ```json
+   {
+     "imports": {
+       "@rhds/elements/": "./node_modules/@rhds/elements/elements/",
+       "@lit-labs/ssr-client/": "./node_modules/@lit-labs/ssr-client/"
+     }
+   }
+   ```
+
+   ```bash
+   golit transform public/ --importmap importmap.local.json
+   ```
+
+   golit reads the `<script type="module">` imports from your HTML, resolves them through the local import map (instead of the CDN one in the HTML), and bundles from local files.
 
 ### Combining Modes
 
@@ -132,15 +157,20 @@ hugo build && golit transform public/ --importmap importmap.json
 
 ### Try the Hugo example
 
-A complete working example using [Red Hat Design System](https://ux.redhat.com) components is included in `examples/hugo-rhds/`. To try it:
+A complete working example using [Red Hat Design System](https://ux.redhat.com) components is included in `examples/hugo-rhds/`. Two build modes are available:
 
 ```bash
 cd examples/hugo-rhds
 npm install
+
+# Pre-bundled (shared runtime + thin modules, then transform)
 make serve
+
+# Auto-discovery (no pre-bundle step, discovers from HTML import maps)
+make serve-auto
 ```
 
-This builds golit from source, runs Hugo, transforms all custom elements into Declarative Shadow DOM, and serves the result at `http://localhost:8080`. Open it in a browser to see fully server-side rendered web components -- no client JS needed for first paint.
+Both produce fully server-side rendered web components at `http://localhost:8080`. The auto-discovery path uses a local import map (`importmap.local.json`) to resolve CDN specifiers to `node_modules/` for SSR bundling.
 
 For authoring content without SSR (faster iteration with Hugo's live-reload dev server):
 
@@ -185,7 +215,7 @@ If **`GOLIT_SERVE_URL`** is **unset**, the examples fall back to running **`goli
 | Variable | Purpose |
 | -------- | -------- |
 | **`GOLIT_SERVE_URL`** | Base URL of `golit serve` (e.g. `http://127.0.0.1:9777`). When set, middleware uses HTTP instead of exec. |
-| **`GOLIT_DEFS`** | Directory of `.golit.bundle.js` files (used by `golit serve` and cold-path transform). |
+| **`GOLIT_DEFS`** | Directory of `.golit.module.js` files and `_runtime.golit.module.js` (used by `golit serve` and cold-path transform). |
 | **`GOLIT_BIN`** | Path to `golit` binary for the cold path only. |
 | **`GOLIT_DISABLED`** | If set (e.g. `1`), skip SSR and serve untransformed HTML (used by benchmarks for A/B comparison). |
 
@@ -198,7 +228,7 @@ QuickJS SSR (used by **`golit transform`** and **`golit serve`** rendering) expo
 | **`GOLIT_FETCH_TIMEOUT_SEC`** | Per-request timeout in seconds (default **10**, clamped). |
 | **`GOLIT_FETCH_MAX_BODY_BYTES`** | Max response body bytes read (default **16 MiB**, capped). |
 
-After upgrading golit, regenerate pre-bundled defs (e.g. **`make bundle`** in **`examples/hugo-rhds`**) so injected **`domshim.js`** matches the new binary.
+After upgrading golit, regenerate pre-bundled modules (e.g. **`make bundle`** in **`examples/hugo-rhds`**) so the shared runtime and domshim match the new binary.
 
 ### PHP example
 
@@ -276,7 +306,7 @@ golit transform <html-dir> [options]
 ```
 
 Options:
-- `--defs <dir>` -- Directory of pre-bundled `.golit.bundle.js` files
+- `--defs <dir>` -- Directory of pre-bundled `.golit.module.js` files (and `_runtime.golit.module.js`)
 - `--sources <dir>` -- Directory of component `.js`/`.ts` source files (auto-bundles)
 - `--importmap <file>` -- Import map JSON file for resolving bare-module specifiers
 - `--out <dir>` -- Output to a separate directory (default: in-place)
@@ -288,25 +318,28 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle a Lit component for SSR. Produces a `.golit.bundle.js` file.
+Pre-bundle Lit components for SSR. All output uses the `.golit.module.js` format, consumable via `--defs`.
+
+- **Directory:** automatically discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) plus thin per-component `.golit.module.js` files that import from it.
+- **Single file:** produces a self-contained `.golit.module.js` (no shared runtime needed for one component).
 
 ```bash
-golit bundle <source.ts|js> [--out <file>] [--minify]
-golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
+golit bundle <src-dir/> [--out <modules-dir/>] [--minify]
+golit bundle <source.ts|js> [--out <file.golit.module.js>] [--minify]
 ```
 
-The bundle includes the component, Lit runtime, DOM shim, and template collector -- everything needed for the QJS engine to render the component.
+The directory build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
 
 ### `golit render`
 
 Render a single HTML fragment to stdout. Useful for testing and scripting.
-Requires pre-built bundles (see `golit bundle` above).
+Requires pre-built modules (see `golit bundle` above).
 
 ```bash
 # First, bundle the component(s) you want to render
-golit bundle node_modules/@rhds/elements/elements/rh-badge/rh-badge.js --out bundles/
+golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 
-# Then render a fragment using the pre-built bundles
+# Then render a fragment using the pre-built modules
 golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 ```
 
@@ -374,12 +407,13 @@ HTML with import map + module scripts
     | golit transform
     | 1. Parse HTML, find <script type="importmap"> and <script type="module">
     | 2. Resolve bare-module specifiers to file paths via import map
-    | 3. Bundle each component with esbuild (component + Lit + DOM shim)
-    | 4. For each custom element in HTML:
-    |    a. Load bundle into QJS (QuickJS via WASM)
-    |    b. Instantiate component, set attributes, call render()
-    |    c. Collect rendered HTML + CSS
-    |    d. Wrap in <template shadowroot="open" shadowrootmode="open">
+    | 3. Discover shared dependencies, build thin ES modules + shared runtime
+    | 4. Load shared runtime (@golit/runtime) into QJS once
+    | 5. Load thin component modules (import from shared runtime)
+    | 6. For each custom element in HTML:
+    |    a. Instantiate component, set attributes, call render()
+    |    b. Collect rendered HTML + CSS
+    |    c. Wrap in <template shadowroot="open" shadowrootmode="open">
     v
 HTML with Declarative Shadow DOM
     |
@@ -392,8 +426,8 @@ Instant paint -> Lit hydrates -> Interactive
 
 golit uses three key technologies:
 
-- **esbuild** (Go-native) -- Bundles TypeScript/JavaScript components with all dependencies into a single file. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
-- **QJS** (QuickJS via WebAssembly/Wazero) -- Executes the bundled component code in a sandboxed JavaScript environment. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
+- **esbuild** (Go-native) -- Three-pass build: (1) discovers shared dependencies via Metafile analysis, (2) produces thin per-component ES modules with shared deps as external imports, (3) bundles the shared runtime from the discovered dependency graph. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
+- **QJS** (QuickJS via WebAssembly/Wazero) -- Loads the shared runtime module once via `JS_SetModuleLoaderFunc`, then evaluates thin component modules that import from it. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
 - **golang.org/x/net/html** -- Parses and transforms HTML documents, inserting Declarative Shadow DOM templates.
 
 ### Output Format
@@ -425,7 +459,7 @@ golit produces Lit-compatible Declarative Shadow DOM with hydration markers:
 ```
 cmd/golit/              CLI binary (bundle, compile, transform, render, serve, version)
 pkg/jsengine/           QJS engine, esbuild bundler, DOM shim, template collector,
-                        import map parser, bundle registry
+                        import map parser, module registry, shared runtime loader
 pkg/transformer/        HTML file walker, component discovery, DSD expansion
 ```
 

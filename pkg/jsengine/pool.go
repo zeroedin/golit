@@ -35,7 +35,8 @@ func NewEnginePool(size int) (*EnginePool, error) {
 }
 
 // PreloadAll drains every engine from the pool, configures preload modules,
-// loads any raw preload bundles, then loads all registry component bundles.
+// loads any raw preload bundles, loads the shared runtime (if present), then
+// loads all registry component bundles/modules.
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
@@ -46,6 +47,14 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 		e.SetPreloadModules(preloadModules)
 		for _, pb := range preloadBundles {
 			_ = e.LoadBundle(pb)
+		}
+		// Load shared runtime once per engine before any components.
+		if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
+			if err := e.LoadModule("@golit/runtime", rt); err != nil {
+				fmt.Fprintf(os.Stderr, "golit: warning: loading shared runtime: %v\n", err)
+			} else {
+				e.loaded["@golit/runtime"] = true
+			}
 		}
 		for _, tag := range tags {
 			if _, err := e.LoadBundleForTag(tag, registry); err != nil {

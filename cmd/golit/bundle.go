@@ -49,38 +49,38 @@ func runBundle(args []string) error {
 	}
 
 	if info.IsDir() {
-		return bundleDir(source, outPath, opts)
+		return bundleDirWithModules(source, outPath, opts)
 	}
 	return bundleFile(source, outPath, opts)
 }
 
 func bundleFile(source, outPath string, opts jsengine.BundleOptions) error {
-	bundle, err := jsengine.BundleComponent(source, opts)
+	mod, err := jsengine.BundleComponentModule(source, opts)
 	if err != nil {
 		return err
 	}
 
 	if outPath == "" {
 		ext := filepath.Ext(source)
-		outPath = strings.TrimSuffix(source, ext) + ".golit.bundle.js"
+		outPath = strings.TrimSuffix(source, ext) + ".golit.module.js"
 	} else {
 		info, err := os.Stat(outPath)
 		if err == nil && info.IsDir() {
 			base := filepath.Base(source)
 			ext := filepath.Ext(base)
-			outPath = filepath.Join(outPath, strings.TrimSuffix(base, ext)+".golit.bundle.js")
+			outPath = filepath.Join(outPath, strings.TrimSuffix(base, ext)+".golit.module.js")
 		}
 	}
 
-	if err := jsengine.SaveBundle(bundle, outPath); err != nil {
+	if err := jsengine.SaveBundle(mod, outPath); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "golit: bundled %s -> %s (%d bytes)\n", source, outPath, len(bundle))
+	fmt.Fprintf(os.Stderr, "golit: module %s -> %s (%d bytes)\n", source, outPath, len(mod))
 	return nil
 }
 
-func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
+func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) error {
 	if outDir == "" {
 		outDir = srcDir
 	}
@@ -88,6 +88,7 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 		return fmt.Errorf("creating output directory: %w", err)
 	}
 
+	// Collect source files
 	var paths []string
 	if err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -98,10 +99,7 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 			return nil
 		}
 		name := d.Name()
-		if strings.HasSuffix(name, ".d.ts") {
-			return nil
-		}
-		if strings.HasSuffix(name, ".golit.bundle.js") {
+		if strings.HasSuffix(name, ".d.ts") || strings.HasSuffix(name, ".golit.bundle.js") || strings.HasSuffix(name, ".golit.module.js") {
 			return nil
 		}
 		ext := filepath.Ext(name)
@@ -119,26 +117,50 @@ func bundleDir(srcDir, outDir string, opts jsengine.BundleOptions) error {
 		return nil
 	}
 
-	bundles, err := jsengine.BundleComponents(paths, opts)
-	if err != nil {
-		return fmt.Errorf("batch bundling: %w", err)
+	nodeModulesDir := jsengine.FindNodeModules(paths[0])
+	if nodeModulesDir == "" {
+		return fmt.Errorf("node_modules not found from %s", paths[0])
 	}
 
+	externals, err := jsengine.DiscoverExternalPackages(paths, nodeModulesDir, opts)
+	if err != nil {
+		return fmt.Errorf("discovering external packages: %w", err)
+	}
+	opts.ExternalPackages = externals
+
+	modules, err := jsengine.BundleComponentModules(paths, opts)
+	if err != nil {
+		return fmt.Errorf("batch bundling modules: %w", err)
+	}
+
+	runtime, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules, opts)
+	if err != nil {
+		return fmt.Errorf("building shared runtime: %w", err)
+	}
+
+	runtimePath := filepath.Join(outDir, "_runtime.golit.module.js")
+	if err := jsengine.SaveBundle(runtime, runtimePath); err != nil {
+		return fmt.Errorf("saving runtime: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "golit: shared runtime -> %s (%d bytes)\n", runtimePath, len(runtime))
+
+	modules = jsengine.RewriteModuleImports(modules, externals)
+
 	count := 0
-	for srcPath, bundle := range bundles {
+	for srcPath, mod := range modules {
 		base := filepath.Base(srcPath)
 		ext := filepath.Ext(base)
-		outName := strings.TrimSuffix(base, ext) + ".golit.bundle.js"
+		outName := strings.TrimSuffix(base, ext) + ".golit.module.js"
 		outPath := filepath.Join(outDir, outName)
 
-		if err := jsengine.SaveBundle(bundle, outPath); err != nil {
+		if err := jsengine.SaveBundle(mod, outPath); err != nil {
 			return fmt.Errorf("saving %s: %w", outPath, err)
 		}
 
-		fmt.Fprintf(os.Stderr, "golit: bundled %s -> %s (%d bytes)\n", srcPath, outPath, len(bundle))
+		fmt.Fprintf(os.Stderr, "golit: module %s -> %s (%d bytes)\n", srcPath, outPath, len(mod))
 		count++
 	}
 
-	fmt.Fprintf(os.Stderr, "golit: %d components bundled\n", count)
+	fmt.Fprintf(os.Stderr, "golit: %d component modules + 1 shared runtime bundled\n", count)
 	return nil
 }

@@ -78,20 +78,20 @@ func TestImportRe_MatchesVariousFormats(t *testing.T) {
 	}
 }
 
-func TestDiscoverFromHTML_SkipsPlainHTML(t *testing.T) {
+func TestCollectSourcePaths_SkipsPlainHTML(t *testing.T) {
 	registry := newTestRegistry()
 
-	discoverFromHTML(
+	paths := collectSourcePaths(
 		`<!DOCTYPE html><html><head><title>No scripts</title></head><body><p>plain</p></body></html>`,
 		"/tmp", "/tmp", registry, nil, false,
 	)
 
-	if len(registry.TagNames()) != 0 {
-		t.Errorf("expected no tags registered for plain HTML, got %v", registry.TagNames())
+	if len(paths) != 0 {
+		t.Errorf("expected no paths for plain HTML, got %v", paths)
 	}
 }
 
-func TestDiscoverFromHTML_DoesNotSkipUnquotedType(t *testing.T) {
+func TestCollectSourcePaths_DoesNotSkipUnquotedType(t *testing.T) {
 	for _, attr := range []string{
 		`type=module`,
 		`type="module"`,
@@ -105,26 +105,24 @@ func TestDiscoverFromHTML_DoesNotSkipUnquotedType(t *testing.T) {
 			if !strings.Contains(html, `type=`) {
 				t.Fatal("sanity: test HTML missing type attribute")
 			}
-			// We can't easily test that html.Parse runs without real
-			// bundles, but we can verify the pre-scan doesn't reject
-			// the content by checking discoverFromHTML doesn't panic
-			// and completes (the parse path runs even with no results).
+			// Verify the pre-scan doesn't reject the content and
+			// collectSourcePaths completes without panic.
 			registry := newTestRegistry()
-			discoverFromHTML(html, "/tmp", "/tmp", registry, nil, false)
+			collectSourcePaths(html, "/tmp", "/tmp", registry, nil, false)
 		})
 	}
 }
 
-func TestDiscoverFromHTML_SkipsRegularScript(t *testing.T) {
+func TestCollectSourcePaths_SkipsRegularScript(t *testing.T) {
 	registry := newTestRegistry()
 
-	discoverFromHTML(
+	paths := collectSourcePaths(
 		`<!DOCTYPE html><html><head><script src="app.js"></script></head><body></body></html>`,
 		"/tmp", "/tmp", registry, nil, false,
 	)
 
-	if len(registry.TagNames()) != 0 {
-		t.Errorf("expected no tags registered for regular scripts, got %v", registry.TagNames())
+	if len(paths) != 0 {
+		t.Errorf("expected no paths for regular scripts, got %v", paths)
 	}
 }
 

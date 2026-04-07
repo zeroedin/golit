@@ -101,7 +101,7 @@ func (e *Engine) SetPreloadModules(modules []string) {
 	e.preloadModules = modules
 }
 
-// LoadBundle loads a pre-bundled component JS file into the engine.
+// LoadBundle loads a pre-bundled component JS file into the engine as a script.
 // Can be called multiple times to load multiple components.
 // If preload modules are set, dynamic import() calls for those modules
 // are replaced with synchronous lookups into __preloadedModules.
@@ -110,6 +110,28 @@ func (e *Engine) LoadBundle(bundle string) error {
 	_, err := e.ctx.Eval("bundle.js", qjs.Code(code))
 	if err != nil {
 		return fmt.Errorf("loading bundle: %w", err)
+	}
+	return nil
+}
+
+// LoadModule pre-registers a named ES module in the QJS module cache
+// without executing it. Other modules can then import from it by name.
+func (e *Engine) LoadModule(name string, source string) error {
+	_, err := e.runtime.Load(name, qjs.Code(source))
+	if err != nil {
+		return fmt.Errorf("loading module %s: %w", name, err)
+	}
+	return nil
+}
+
+// EvalModule evaluates an ES module, executing its body and registering
+// any custom elements it defines. Use for component modules that need
+// their side-effects (like customElements.define) to run.
+func (e *Engine) EvalModule(name string, source string) error {
+	code := e.shimDynamicImports(source)
+	_, err := e.ctx.Eval(name, qjs.Code(code), qjs.TypeModule())
+	if err != nil {
+		return fmt.Errorf("evaluating module %s: %w", name, err)
 	}
 	return nil
 }
@@ -190,21 +212,30 @@ func (e *Engine) shimDynamicImports(code string) string {
 	return b.String()
 }
 
-// LoadBundleForTag loads a bundle from the registry for a specific tag name.
+// LoadBundleForTag loads a component from the registry for a specific tag name.
 // Returns (true, nil) if loaded or already loaded, (false, nil) if the tag
 // is not in the registry, or (false, err) if loading failed.
+// If a shared runtime is present, it is loaded first. All registry content
+// is evaluated as ES modules via EvalModule (registry stores .golit.module.js).
 func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, error) {
 	if e.loaded[tagName] {
 		return true, nil
 	}
 
-	bundle := registry.Lookup(tagName)
-	if bundle == "" {
+	source := registry.Lookup(tagName)
+	if source == "" {
 		return false, nil
 	}
 
-	if err := e.LoadBundle(bundle); err != nil {
-		return false, fmt.Errorf("loading bundle for <%s>: %w", tagName, err)
+	if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
+		if err := e.LoadModule("@golit/runtime", rt); err != nil {
+			return false, fmt.Errorf("loading shared runtime: %w", err)
+		}
+		e.loaded["@golit/runtime"] = true
+	}
+
+	if err := e.EvalModule(tagName+".js", source); err != nil {
+		return false, fmt.Errorf("loading module for <%s>: %w", tagName, err)
 	}
 
 	e.loaded[tagName] = true

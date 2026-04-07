@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -52,6 +53,138 @@ func ensureShimDir() (string, string, string, error) {
 type BundleOptions struct {
 	// Minify minifies the output bundle.
 	Minify bool
+
+	// ExternalPackages lists package specifiers to mark as external.
+	// Discovered via DiscoverExternalPackages and passed to
+	// BundleComponentModule(s) so shared deps stay as import statements.
+	ExternalPackages []string
+}
+
+// DiscoverExternalPackages runs esbuild with Metafile enabled on all
+// component entry points to discover which node_modules packages they
+// depend on. Returns esbuild-compatible external patterns (pkg + pkg/*).
+func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, opts ...BundleOptions) ([]string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	sp, cp, _, err := ensureShimDir()
+	if err != nil {
+		return nil, fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	type entry struct {
+		absPath string
+		key     string
+	}
+	entries := make([]entry, 0, len(componentPaths))
+	for _, p := range componentPaths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			continue
+		}
+		key := fmt.Sprintf("disc_%d", len(entries))
+		entries = append(entries, entry{absPath: absPath, key: key})
+	}
+
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	_, _, sd, err := ensureShimDir()
+	if err != nil {
+		return nil, fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	esbuildEntries := make([]api.EntryPoint, len(entries))
+	for i, e := range entries {
+		esbuildEntries[i] = api.EntryPoint{
+			InputPath:  e.absPath,
+			OutputPath: e.key,
+		}
+	}
+
+	result := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: esbuildEntries,
+		Bundle:              true,
+		Format:              api.FormatESModule,
+		Target:              api.ES2022,
+		Platform:            api.PlatformNeutral,
+		Inject:              []string{sp, cp},
+		Metafile:            true,
+		Write:               false,
+		Outdir:              sd,
+		NodePaths:           []string{nodeModulesDir},
+		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:             buildPlugins(opt),
+		Conditions:          []string{"node"},
+		LogLevel:            api.LogLevelSilent,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return nil, fmt.Errorf("esbuild discovery errors: %s", strings.Join(msgs, "; "))
+	}
+
+	return parseMetafilePackages(result.Metafile)
+}
+
+// parseMetafilePackages extracts node_modules package names from esbuild
+// metafile JSON and returns esbuild external patterns (pkg + pkg/*).
+func parseMetafilePackages(metafile string) ([]string, error) {
+	var meta struct {
+		Inputs map[string]json.RawMessage `json:"inputs"`
+	}
+	if err := json.Unmarshal([]byte(metafile), &meta); err != nil {
+		return nil, fmt.Errorf("parsing metafile: %w", err)
+	}
+
+	pkgs := make(map[string]bool)
+	for inputPath := range meta.Inputs {
+		pkg := extractNodeModulesPackage(inputPath)
+		if pkg != "" {
+			pkgs[pkg] = true
+		}
+	}
+
+	patterns := make([]string, 0, len(pkgs)*2)
+	for pkg := range pkgs {
+		patterns = append(patterns, pkg, pkg+"/*")
+	}
+	sort.Strings(patterns)
+	return patterns, nil
+}
+
+// extractNodeModulesPackage extracts the package name from a path that
+// goes through node_modules. Returns "" if the path is not from node_modules.
+// Handles scoped packages (@scope/pkg) and unscoped (pkg).
+func extractNodeModulesPackage(inputPath string) string {
+	inputPath = filepath.ToSlash(inputPath)
+	const marker = "node_modules/"
+	idx := strings.LastIndex(inputPath, marker)
+	if idx < 0 {
+		return ""
+	}
+	rest := inputPath[idx+len(marker):]
+	if rest == "" {
+		return ""
+	}
+
+	parts := strings.SplitN(rest, "/", 3)
+	if strings.HasPrefix(parts[0], "@") {
+		if len(parts) < 2 {
+			return parts[0]
+		}
+		return parts[0] + "/" + parts[1]
+	}
+	return parts[0]
 }
 
 // BundleComponent uses esbuild to bundle a Lit component source file
@@ -203,106 +336,6 @@ func stripESMExports(code string) (string, bool) {
 	return b.String(), hasTopLevelAwait
 }
 
-// BundleComponents bundles multiple component source files in a single
-// esbuild invocation, sharing module resolution and parsed ASTs across
-// all entry points. Returns a map from input path to bundle string.
-// Files that fail to bundle are silently skipped.
-func BundleComponents(componentPaths []string, opts ...BundleOptions) (map[string]string, error) {
-	opt := BundleOptions{}
-	if len(opts) > 0 {
-		opt = opts[0]
-	}
-
-	if len(componentPaths) == 0 {
-		return nil, nil
-	}
-
-	// Resolve all paths and filter out missing files
-	type entry struct {
-		absPath string
-		key     string // indexed output path for mapping
-	}
-	entries := make([]entry, 0, len(componentPaths))
-	for _, p := range componentPaths {
-		absPath, err := filepath.Abs(p)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(absPath); os.IsNotExist(err) {
-			continue
-		}
-		key := fmt.Sprintf("entry_%d", len(entries))
-		entries = append(entries, entry{absPath: absPath, key: key})
-	}
-
-	if len(entries) == 0 {
-		return nil, nil
-	}
-
-	sp, cp, sd, err := ensureShimDir()
-	if err != nil {
-		return nil, fmt.Errorf("preparing shim files: %w", err)
-	}
-
-	// Find node_modules from the first entry point
-	nodeModulesDir := findNodeModules(entries[0].absPath)
-
-	// Build entry points list and output-key-to-input-path map
-	esbuildEntries := make([]api.EntryPoint, len(entries))
-	keyToPath := make(map[string]string, len(entries))
-	for i, e := range entries {
-		esbuildEntries[i] = api.EntryPoint{
-			InputPath:  e.absPath,
-			OutputPath: e.key,
-		}
-		keyToPath[e.key+".js"] = e.absPath
-	}
-
-	// Single esbuild call for all entry points
-	result := api.Build(api.BuildOptions{
-		EntryPointsAdvanced: esbuildEntries,
-		Bundle:              true,
-		Format:              api.FormatESModule,
-		Target:              api.ES2022,
-		Platform:            api.PlatformNeutral,
-		Inject:              []string{sp, cp},
-		Write:               false,
-		Outdir:              sd, // required for multiple entry points; not written (Write:false)
-		MinifyWhitespace:    opt.Minify,
-		MinifySyntax:        opt.Minify,
-		NodePaths:           []string{nodeModulesDir},
-		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
-		Plugins:             buildPlugins(opt),
-		Conditions:          []string{"node"},
-		LogLevel:            api.LogLevelSilent,
-	})
-
-	if len(result.Errors) > 0 {
-		var msgs []string
-		for _, e := range result.Errors {
-			msgs = append(msgs, e.Text)
-		}
-		return nil, fmt.Errorf("esbuild batch bundle errors: %s", strings.Join(msgs, "; "))
-	}
-
-	// Map output files back to input paths
-	bundles := make(map[string]string, len(result.OutputFiles))
-	for _, of := range result.OutputFiles {
-		base := filepath.Base(of.Path)
-		inputPath, ok := keyToPath[base]
-		if !ok {
-			continue
-		}
-		code := string(of.Contents)
-		code, hasTopLevelAwait := stripESMExports(code)
-		if hasTopLevelAwait {
-			code = "(async () => {\n" + code + "\n})();\n"
-		}
-		bundles[inputPath] = code
-	}
-
-	return bundles, nil
-}
 
 // buildPlugins returns the shared esbuild plugins for component bundling.
 func buildPlugins(opt BundleOptions) []api.Plugin {
@@ -537,6 +570,441 @@ func parseExportList(body string) []string {
 	return names
 }
 
+// BundleSharedRuntime produces a single ES module containing all shared
+// dependencies that the thin component modules import. The output keeps
+// ESM export syntax intact so it can be loaded via
+// Engine.LoadModule("@golit/runtime", source).
+// modules is the map of thin module sources (from BundleComponentModules)
+// used to discover which external specifiers to include.
+func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts ...BundleOptions) (string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	sp, cp, _, err := ensureShimDir()
+	if err != nil {
+		return "", fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	entrySource := buildRuntimeEntryFromModules(modules)
+
+	entryDir, err := os.MkdirTemp("", "golit-runtime-entry-*")
+	if err != nil {
+		return "", fmt.Errorf("creating temp dir: %w", err)
+	}
+	defer os.RemoveAll(entryDir)
+
+	entryPath := filepath.Join(entryDir, "_runtime_entry.js")
+	if err := os.WriteFile(entryPath, []byte(entrySource), 0644); err != nil {
+		return "", fmt.Errorf("writing runtime entry: %w", err)
+	}
+
+	result := api.Build(api.BuildOptions{
+		EntryPoints:      []string{entryPath},
+		Bundle:           true,
+		Format:           api.FormatESModule,
+		Target:           api.ES2022,
+		Platform:         api.PlatformNeutral,
+		Inject:           []string{sp, cp},
+		Write:            false,
+		MinifyWhitespace: opt.Minify,
+		MinifySyntax:     opt.Minify,
+		NodePaths:        []string{nodeModulesDir},
+		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:          buildPlugins(opt),
+		Conditions:       []string{"node"},
+		LogLevel:         api.LogLevelSilent,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return "", fmt.Errorf("esbuild shared runtime errors: %s", strings.Join(msgs, "; "))
+	}
+
+	if len(result.OutputFiles) == 0 {
+		return "", fmt.Errorf("esbuild produced no output for shared runtime")
+	}
+
+	return string(result.OutputFiles[0].Contents), nil
+}
+
+// BundleComponentModule produces an ES module for a component with shared
+// dependencies marked as external. The output keeps import/export statements
+// so it can be loaded via Engine.EvalModule. Callers should use
+// RewriteModuleImports to rewrite external specifiers to "@golit/runtime"
+// after extracting import specifiers for runtime building.
+// The domshim and template collector are injected so the module works
+// both with and without a shared runtime.
+func BundleComponentModule(componentPath string, opts ...BundleOptions) (string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+	return bundleComponentModule(componentPath, opt)
+}
+
+func bundleComponentModule(componentPath string, opt BundleOptions) (string, error) {
+	absPath, err := filepath.Abs(componentPath)
+	if err != nil {
+		return "", fmt.Errorf("resolving path: %w", err)
+	}
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("component file not found: %s", absPath)
+	}
+
+	sp, cp, _, err := ensureShimDir()
+	if err != nil {
+		return "", fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	nodeModulesDir := findNodeModules(absPath)
+	sourceDir := filepath.Dir(absPath)
+
+	result := api.Build(api.BuildOptions{
+		EntryPoints:      []string{absPath},
+		Bundle:           true,
+		Format:           api.FormatESModule,
+		Target:           api.ES2022,
+		Platform:         api.PlatformNeutral,
+		External:         opt.ExternalPackages,
+		Inject:           []string{sp, cp},
+		Write:            false,
+		MinifyWhitespace: opt.Minify,
+		MinifySyntax:     opt.Minify,
+		NodePaths:        []string{nodeModulesDir},
+		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:          buildPlugins(opt),
+		Conditions:       []string{"node"},
+		LogLevel:         api.LogLevelSilent,
+		AbsWorkingDir:    sourceDir,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return "", fmt.Errorf("esbuild module errors: %s", strings.Join(msgs, "; "))
+	}
+
+	if len(result.OutputFiles) == 0 {
+		return "", fmt.Errorf("esbuild produced no output")
+	}
+
+	return string(result.OutputFiles[0].Contents), nil
+}
+
+// BundleComponentModules produces thin ES modules for multiple components in
+// a single esbuild invocation. Returns a map from input path to module source.
+func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map[string]string, error) {
+	opt := BundleOptions{}
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
+	if len(componentPaths) == 0 {
+		return nil, nil
+	}
+
+	type entry struct {
+		absPath string
+		key     string
+	}
+	entries := make([]entry, 0, len(componentPaths))
+	for _, p := range componentPaths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			continue
+		}
+		key := fmt.Sprintf("entry_%d", len(entries))
+		entries = append(entries, entry{absPath: absPath, key: key})
+	}
+
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	sp, cp, sd, err := ensureShimDir()
+	if err != nil {
+		return nil, fmt.Errorf("preparing shim files: %w", err)
+	}
+
+	nodeModulesDir := findNodeModules(entries[0].absPath)
+
+	esbuildEntries := make([]api.EntryPoint, len(entries))
+	keyToPath := make(map[string]string, len(entries))
+	for i, e := range entries {
+		esbuildEntries[i] = api.EntryPoint{
+			InputPath:  e.absPath,
+			OutputPath: e.key,
+		}
+		keyToPath[e.key+".js"] = e.absPath
+	}
+
+	result := api.Build(api.BuildOptions{
+		EntryPointsAdvanced: esbuildEntries,
+		Bundle:              true,
+		Format:              api.FormatESModule,
+		Target:              api.ES2022,
+		Platform:            api.PlatformNeutral,
+		External:            opt.ExternalPackages,
+		Inject:              []string{sp, cp},
+		Write:               false,
+		Outdir:              sd,
+		MinifyWhitespace:    opt.Minify,
+		MinifySyntax:        opt.Minify,
+		NodePaths:           []string{nodeModulesDir},
+		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
+		Plugins:             buildPlugins(opt),
+		Conditions:          []string{"node"},
+		LogLevel:            api.LogLevelSilent,
+	})
+
+	if len(result.Errors) > 0 {
+		var msgs []string
+		for _, e := range result.Errors {
+			msgs = append(msgs, e.Text)
+		}
+		return nil, fmt.Errorf("esbuild batch module errors: %s", strings.Join(msgs, "; "))
+	}
+
+	modules := make(map[string]string, len(result.OutputFiles))
+	for _, of := range result.OutputFiles {
+		base := filepath.Base(of.Path)
+		inputPath, ok := keyToPath[base]
+		if !ok {
+			continue
+		}
+		modules[inputPath] = string(of.Contents)
+	}
+
+	return modules, nil
+}
+
+// RewriteModuleImports rewrites import specifiers for shared packages
+// in all module sources to "@golit/runtime". The externals list determines
+// which specifiers are considered shared. Call this after
+// extractExternalImports if you need the raw specifiers for runtime building.
+func RewriteModuleImports(modules map[string]string, externals []string) map[string]string {
+	rewritten := make(map[string]string, len(modules))
+	for k, v := range modules {
+		rewritten[k] = rewriteImportsToRuntime(v, externals)
+	}
+	return rewritten
+}
+
+func rewriteImportsToRuntime(code string, externals []string) string {
+	lines := strings.Split(code, "\n")
+	var b strings.Builder
+	b.Grow(len(code))
+
+	for i, line := range lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "import ") {
+			if strings.Contains(trimmed, " from ") {
+				if rewritten, ok := rewriteImportLine(line, externals); ok {
+					b.WriteString(rewritten)
+					continue
+				}
+			} else if rewritten, ok := rewriteSideEffectImport(line, externals); ok {
+				b.WriteString(rewritten)
+				continue
+			}
+		}
+		b.WriteString(line)
+	}
+
+	return b.String()
+}
+
+func rewriteImportLine(line string, externals []string) (string, bool) {
+	fromIdx := strings.LastIndex(line, " from ")
+	if fromIdx < 0 {
+		return "", false
+	}
+	specPart := strings.TrimSpace(line[fromIdx+6:])
+	specPart = strings.TrimSuffix(specPart, ";")
+	specPart = strings.TrimSpace(specPart)
+
+	if len(specPart) < 2 {
+		return "", false
+	}
+	quote := specPart[0]
+	if quote != '\'' && quote != '"' {
+		return "", false
+	}
+	endQuote := strings.IndexByte(specPart[1:], quote)
+	if endQuote < 0 {
+		return "", false
+	}
+	specifier := specPart[1 : 1+endQuote]
+
+	if matchesExternals(specifier, externals) {
+		return line[:fromIdx] + " from " + string(quote) + "@golit/runtime" + string(quote) + ";", true
+	}
+	return "", false
+}
+
+func rewriteSideEffectImport(line string, externals []string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimPrefix(trimmed, "import ")
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+
+	if len(trimmed) < 2 {
+		return "", false
+	}
+	quote := trimmed[0]
+	if quote != '\'' && quote != '"' {
+		return "", false
+	}
+	endQuote := strings.IndexByte(trimmed[1:], quote)
+	if endQuote < 0 {
+		return "", false
+	}
+	specifier := trimmed[1 : 1+endQuote]
+
+	if matchesExternals(specifier, externals) {
+		return "/* side-effect import included in @golit/runtime: " + specifier + " */", true
+	}
+	return "", false
+}
+
+func matchesExternals(specifier string, externals []string) bool {
+	for _, pkg := range externals {
+		if strings.HasSuffix(pkg, "/*") {
+			prefix := strings.TrimSuffix(pkg, "/*")
+			if specifier == prefix || strings.HasPrefix(specifier, prefix+"/") {
+				return true
+			}
+		} else if specifier == pkg {
+			return true
+		}
+	}
+	return false
+}
+
+// extractExternalImports scans thin module sources for import statements
+// that reference external packages (not @golit/runtime or relative paths).
+// Returns two sets: re-export specifiers (from named imports) and
+// side-effect specifiers (from bare imports).
+func extractExternalImports(modules map[string]string) (reexports []string, sideEffects []string) {
+	reexportSet := make(map[string]bool)
+	sideEffectSet := make(map[string]bool)
+
+	for _, source := range modules {
+		for _, line := range strings.Split(source, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "import ") {
+				continue
+			}
+
+			if strings.Contains(trimmed, " from ") {
+				spec := extractFromSpecifier(trimmed)
+				if spec != "" && !isLocalOrRuntime(spec) {
+					reexportSet[spec] = true
+				}
+			} else {
+				spec := extractBareImportSpecifier(trimmed)
+				if spec != "" && !isLocalOrRuntime(spec) {
+					sideEffectSet[spec] = true
+				}
+			}
+		}
+	}
+
+	reexports = make([]string, 0, len(reexportSet))
+	for spec := range reexportSet {
+		reexports = append(reexports, spec)
+	}
+	sort.Strings(reexports)
+
+	sideEffects = make([]string, 0, len(sideEffectSet))
+	for spec := range sideEffectSet {
+		sideEffects = append(sideEffects, spec)
+	}
+	sort.Strings(sideEffects)
+
+	return reexports, sideEffects
+}
+
+func extractFromSpecifier(line string) string {
+	fromIdx := strings.LastIndex(line, " from ")
+	if fromIdx < 0 {
+		return ""
+	}
+	spec := strings.TrimSpace(line[fromIdx+6:])
+	spec = strings.TrimSuffix(spec, ";")
+	spec = strings.TrimSpace(spec)
+	if len(spec) < 2 {
+		return ""
+	}
+	quote := spec[0]
+	if quote != '\'' && quote != '"' {
+		return ""
+	}
+	end := strings.IndexByte(spec[1:], quote)
+	if end < 0 {
+		return ""
+	}
+	return spec[1 : 1+end]
+}
+
+func extractBareImportSpecifier(line string) string {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimPrefix(trimmed, "import ")
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+	if len(trimmed) < 2 {
+		return ""
+	}
+	quote := trimmed[0]
+	if quote != '\'' && quote != '"' {
+		return ""
+	}
+	end := strings.IndexByte(trimmed[1:], quote)
+	if end < 0 {
+		return ""
+	}
+	return trimmed[1 : 1+end]
+}
+
+func isLocalOrRuntime(specifier string) bool {
+	return specifier == "@golit/runtime" ||
+		strings.HasPrefix(specifier, "./") ||
+		strings.HasPrefix(specifier, "../") ||
+		strings.HasPrefix(specifier, "/")
+}
+
+// buildRuntimeEntryFromModules generates the shared runtime entry source
+// by scanning thin module sources for their external import specifiers.
+func buildRuntimeEntryFromModules(modules map[string]string) string {
+	reexports, sideEffects := extractExternalImports(modules)
+
+	var b strings.Builder
+	for _, spec := range sideEffects {
+		b.WriteString(fmt.Sprintf("import '%s';\n", spec))
+	}
+	for _, spec := range reexports {
+		b.WriteString(fmt.Sprintf("export * from '%s';\n", spec))
+	}
+
+	if b.Len() == 0 {
+		return "export {};\n"
+	}
+	return b.String()
+}
+
 // ResolveModulePath resolves a bare module specifier to a file path by
 // looking up its entry point in node_modules/package.json.
 func ResolveModulePath(specifier string, fromDir string) (string, error) {
@@ -602,7 +1070,11 @@ func SaveBundle(bundle string, path string) error {
 	return fileutil.WriteFileAtomic(path, []byte(bundle), 0644)
 }
 
-// findNodeModules walks up from the given path to find node_modules.
+// FindNodeModules walks up from the given path to find node_modules.
+func FindNodeModules(fromPath string) string {
+	return findNodeModules(fromPath)
+}
+
 func findNodeModules(fromPath string) string {
 	dir := filepath.Dir(fromPath)
 	for {
