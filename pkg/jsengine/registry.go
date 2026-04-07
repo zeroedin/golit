@@ -171,11 +171,11 @@ func (r *Registry) SetSharedRuntime(source string) {
 	r.mu.Unlock()
 }
 
-// RuntimeExternals returns the package prefixes bundled into the shared runtime.
+// RuntimeExternals returns a copy of the package prefixes bundled into the shared runtime.
 func (r *Registry) RuntimeExternals() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.runtimeExternals
+	return append([]string(nil), r.runtimeExternals...)
 }
 
 // SetRuntimeExternals stores the package prefixes bundled into the shared runtime.
@@ -185,12 +185,12 @@ func (r *Registry) SetRuntimeExternals(externals []string) {
 	r.mu.Unlock()
 }
 
-// DynamicImportTargets returns the specific module specifiers found in
+// DynamicImportTargets returns a copy of the module specifiers found in
 // dynamic import() calls within thin modules.
 func (r *Registry) DynamicImportTargets() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.dynamicImportTargets
+	return append([]string(nil), r.dynamicImportTargets...)
 }
 
 // SetDynamicImportTargets stores the dynamic import target specifiers.
