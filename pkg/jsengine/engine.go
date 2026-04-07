@@ -282,13 +282,16 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, err
 		e.runtimeExternals = ext
 	}
 
-	for specifier, modSource := range registry.DynamicModules() {
-		if !e.loaded[specifier] {
-			if err := e.LoadModule(specifier, modSource); err != nil {
-				return false, fmt.Errorf("loading dynamic module %s for <%s>: %w", specifier, tagName, err)
+	if !e.loaded["@golit/dynamic-modules"] {
+		for specifier, modSource := range registry.DynamicModules() {
+			if !e.loaded[specifier] {
+				if err := e.LoadModule(specifier, modSource); err != nil {
+					return false, fmt.Errorf("loading dynamic module %s for <%s>: %w", specifier, tagName, err)
+				}
+				e.loaded[specifier] = true
 			}
-			e.loaded[specifier] = true
 		}
+		e.loaded["@golit/dynamic-modules"] = true
 	}
 
 	if err := e.EvalModule(tagName+".js", source); err != nil {
