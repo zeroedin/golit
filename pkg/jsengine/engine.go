@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -286,10 +285,9 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, err
 	for specifier, modSource := range registry.DynamicModules() {
 		if !e.loaded[specifier] {
 			if err := e.LoadModule(specifier, modSource); err != nil {
-				fmt.Fprintf(os.Stderr, "golit: warning: loading dynamic module %s: %v\n", specifier, err)
-			} else {
-				e.loaded[specifier] = true
+				return false, fmt.Errorf("loading dynamic module %s for <%s>: %w", specifier, tagName, err)
 			}
+			e.loaded[specifier] = true
 		}
 	}
 
