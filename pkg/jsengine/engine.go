@@ -215,9 +215,8 @@ func (e *Engine) shimDynamicImports(code string) string {
 // LoadBundleForTag loads a component from the registry for a specific tag name.
 // Returns (true, nil) if loaded or already loaded, (false, nil) if the tag
 // is not in the registry, or (false, err) if loading failed.
-// When a shared runtime is present, thin ES modules are loaded via EvalModule.
-// Otherwise, content is loaded as a script via LoadBundle (for compiled
-// artifacts and programmatic use via BundleSource).
+// If a shared runtime is present, it is loaded first. All registry content
+// is evaluated as ES modules via EvalModule (registry stores .golit.module.js).
 func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, error) {
 	if e.loaded[tagName] {
 		return true, nil
@@ -228,20 +227,15 @@ func (e *Engine) LoadBundleForTag(tagName string, registry *Registry) (bool, err
 		return false, nil
 	}
 
-	if rt := registry.SharedRuntime(); rt != "" {
-		if !e.loaded["@golit/runtime"] {
-			if err := e.LoadModule("@golit/runtime", rt); err != nil {
-				return false, fmt.Errorf("loading shared runtime: %w", err)
-			}
-			e.loaded["@golit/runtime"] = true
+	if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
+		if err := e.LoadModule("@golit/runtime", rt); err != nil {
+			return false, fmt.Errorf("loading shared runtime: %w", err)
 		}
-		if err := e.EvalModule(tagName+".js", source); err != nil {
-			return false, fmt.Errorf("loading module for <%s>: %w", tagName, err)
-		}
-	} else {
-		if err := e.LoadBundle(source); err != nil {
-			return false, fmt.Errorf("loading bundle for <%s>: %w", tagName, err)
-		}
+		e.loaded["@golit/runtime"] = true
+	}
+
+	if err := e.EvalModule(tagName+".js", source); err != nil {
+		return false, fmt.Errorf("loading module for <%s>: %w", tagName, err)
 	}
 
 	e.loaded[tagName] = true
