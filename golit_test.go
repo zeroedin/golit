@@ -18,9 +18,14 @@ func setupRendererBundles(t *testing.T) string {
 		"testdata/sources/my-card.ts",
 	}
 
+	modules, err := jsengine.BundleComponentModules(sources)
+	if err != nil {
+		t.Fatalf("bundling modules: %v", err)
+	}
+
 	nodeModulesDir := jsengine.FindNodeModules(sources[0])
 	if nodeModulesDir != "" {
-		rt, err := jsengine.BundleSharedRuntime(nodeModulesDir)
+		rt, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules)
 		if err != nil {
 			t.Fatalf("building shared runtime: %v", err)
 		}
@@ -29,10 +34,7 @@ func setupRendererBundles(t *testing.T) string {
 		}
 	}
 
-	modules, err := jsengine.BundleComponentModules(sources)
-	if err != nil {
-		t.Fatalf("bundling modules: %v", err)
-	}
+	modules = jsengine.RewriteModuleImports(modules)
 
 	for srcPath, mod := range modules {
 		base := filepath.Base(srcPath)

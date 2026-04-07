@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -572,10 +573,12 @@ func parseExportList(body string) []string {
 }
 
 // BundleSharedRuntime produces a single ES module containing all shared
-// Lit dependencies. The output keeps ESM export syntax intact so it can
-// be loaded via Engine.LoadModule("@golit/runtime", source).
-// nodeModulesDir should point to the project's node_modules directory.
-func BundleSharedRuntime(nodeModulesDir string, opts ...BundleOptions) (string, error) {
+// dependencies that the thin component modules import. The output keeps
+// ESM export syntax intact so it can be loaded via
+// Engine.LoadModule("@golit/runtime", source).
+// modules is the map of thin module sources (from BundleComponentModules)
+// used to discover which external specifiers to include.
+func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts ...BundleOptions) (string, error) {
 	opt := BundleOptions{}
 	if len(opts) > 0 {
 		opt = opts[0]
@@ -586,12 +589,7 @@ func BundleSharedRuntime(nodeModulesDir string, opts ...BundleOptions) (string, 
 		return "", fmt.Errorf("preparing shim files: %w", err)
 	}
 
-	// Build the entry dynamically: discover all external package specifiers
-	// that would be imported by component modules, then re-export from them.
-	entrySource, err := buildRuntimeEntry(nodeModulesDir, opt)
-	if err != nil {
-		return "", fmt.Errorf("building runtime entry: %w", err)
-	}
+	entrySource := buildRuntimeEntryFromModules(modules)
 
 	entryDir, err := os.MkdirTemp("", "golit-runtime-entry-*")
 	if err != nil {
@@ -696,8 +694,7 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		return "", fmt.Errorf("esbuild produced no output")
 	}
 
-	code := string(result.OutputFiles[0].Contents)
-	return rewriteImportsToRuntime(code), nil
+	return string(result.OutputFiles[0].Contents), nil
 }
 
 // BundleComponentModules produces thin ES modules for multiple components in
@@ -789,10 +786,21 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		if !ok {
 			continue
 		}
-		modules[inputPath] = rewriteImportsToRuntime(string(of.Contents))
+		modules[inputPath] = string(of.Contents)
 	}
 
 	return modules, nil
+}
+
+// RewriteModuleImports rewrites import specifiers for shared packages
+// in all module sources to "@golit/runtime". Call this after
+// extractExternalImports if you need the raw specifiers for runtime building.
+func RewriteModuleImports(modules map[string]string) map[string]string {
+	rewritten := make(map[string]string, len(modules))
+	for k, v := range modules {
+		rewritten[k] = rewriteImportsToRuntime(v)
+	}
+	return rewritten
 }
 
 // rewriteImportsToRuntime replaces import specifiers for shared packages
@@ -897,60 +905,115 @@ func isSharedPackage(specifier string) bool {
 	return false
 }
 
-// runtimeEntrySpecifiers are the specific import specifiers that the
-// shared runtime re-exports. These are the entry points that RHDS and
-// Lit components actually import (not every file in the package tree).
-var runtimeEntrySpecifiers = []string{
-	"lit",
-	"lit/decorators.js",
-	"lit/directives/class-map.js",
-	"lit/directives/style-map.js",
-	"lit/directives/if-defined.js",
-	"lit/directives/repeat.js",
-	"lit/directives/unsafe-html.js",
-	"@lit/reactive-element",
-	"@lit/reactive-element/decorators.js",
-	"@lit/context",
-	"tslib",
-	"@patternfly/pfe-core",
-	"@patternfly/pfe-core/controllers/logger.js",
-	"@patternfly/pfe-core/controllers/slot-controller.js",
-	"@patternfly/pfe-core/controllers/internals-controller.js",
-	"@patternfly/pfe-core/controllers/floating-dom-controller.js",
-	"@patternfly/pfe-core/controllers/timestamp-controller.js",
-	"@patternfly/pfe-core/controllers/overflow-controller.js",
-	"@patternfly/pfe-core/controllers/roving-tabindex-controller.js",
-	"@patternfly/pfe-core/controllers/scroll-spy-controller.js",
-	"@patternfly/pfe-core/controllers/tabs-aria-controller.js",
-	"@patternfly/pfe-core/decorators.js",
-	"@patternfly/pfe-core/decorators/observes.js",
-	"@patternfly/pfe-core/functions/random.js",
-	"@patternfly/pfe-core/functions/context.js",
-	"@rhds/elements/lib/color-palettes.js",
-	"@rhds/elements/lib/themable.js",
-	"@rhds/elements/lib/context/headings/consumer.js",
-	"@rhds/elements/lib/context/headings/provider.js",
-	"@rhds/tokens/media.js",
-	"@rhds/icons",
-	"@rhds/icons/icons.js",
+// extractExternalImports scans thin module sources for import statements
+// that reference external packages (not @golit/runtime or relative paths).
+// Returns two sets: re-export specifiers (from named imports) and
+// side-effect specifiers (from bare imports).
+func extractExternalImports(modules map[string]string) (reexports []string, sideEffects []string) {
+	reexportSet := make(map[string]bool)
+	sideEffectSet := make(map[string]bool)
+
+	for _, source := range modules {
+		for _, line := range strings.Split(source, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "import ") {
+				continue
+			}
+
+			if strings.Contains(trimmed, " from ") {
+				spec := extractFromSpecifier(trimmed)
+				if spec != "" && !isLocalOrRuntime(spec) {
+					reexportSet[spec] = true
+				}
+			} else {
+				spec := extractBareImportSpecifier(trimmed)
+				if spec != "" && !isLocalOrRuntime(spec) {
+					sideEffectSet[spec] = true
+				}
+			}
+		}
+	}
+
+	reexports = make([]string, 0, len(reexportSet))
+	for spec := range reexportSet {
+		reexports = append(reexports, spec)
+	}
+	sort.Strings(reexports)
+
+	sideEffects = make([]string, 0, len(sideEffectSet))
+	for spec := range sideEffectSet {
+		sideEffects = append(sideEffects, spec)
+	}
+	sort.Strings(sideEffects)
+
+	return reexports, sideEffects
 }
 
-// runtimeSideEffectSpecifiers are imported for side-effects only (no exports).
-var runtimeSideEffectSpecifiers = []string{
-	"@patternfly/pfe-core/ssr-shims.js",
+func extractFromSpecifier(line string) string {
+	fromIdx := strings.LastIndex(line, " from ")
+	if fromIdx < 0 {
+		return ""
+	}
+	spec := strings.TrimSpace(line[fromIdx+6:])
+	spec = strings.TrimSuffix(spec, ";")
+	spec = strings.TrimSpace(spec)
+	if len(spec) < 2 {
+		return ""
+	}
+	quote := spec[0]
+	if quote != '\'' && quote != '"' {
+		return ""
+	}
+	end := strings.IndexByte(spec[1:], quote)
+	if end < 0 {
+		return ""
+	}
+	return spec[1 : 1+end]
 }
 
-// buildRuntimeEntry generates the shared runtime entry source from the
-// curated lists of specifiers.
-func buildRuntimeEntry(_ string, _ BundleOptions) (string, error) {
+func extractBareImportSpecifier(line string) string {
+	trimmed := strings.TrimSpace(line)
+	trimmed = strings.TrimPrefix(trimmed, "import ")
+	trimmed = strings.TrimSuffix(trimmed, ";")
+	trimmed = strings.TrimSpace(trimmed)
+	if len(trimmed) < 2 {
+		return ""
+	}
+	quote := trimmed[0]
+	if quote != '\'' && quote != '"' {
+		return ""
+	}
+	end := strings.IndexByte(trimmed[1:], quote)
+	if end < 0 {
+		return ""
+	}
+	return trimmed[1 : 1+end]
+}
+
+func isLocalOrRuntime(specifier string) bool {
+	return specifier == "@golit/runtime" ||
+		strings.HasPrefix(specifier, "./") ||
+		strings.HasPrefix(specifier, "../") ||
+		strings.HasPrefix(specifier, "/")
+}
+
+// buildRuntimeEntryFromModules generates the shared runtime entry source
+// by scanning thin module sources for their external import specifiers.
+func buildRuntimeEntryFromModules(modules map[string]string) string {
+	reexports, sideEffects := extractExternalImports(modules)
+
 	var b strings.Builder
-	for _, spec := range runtimeSideEffectSpecifiers {
+	for _, spec := range sideEffects {
 		b.WriteString(fmt.Sprintf("import '%s';\n", spec))
 	}
-	for _, spec := range runtimeEntrySpecifiers {
+	for _, spec := range reexports {
 		b.WriteString(fmt.Sprintf("export * from '%s';\n", spec))
 	}
-	return b.String(), nil
+
+	if b.Len() == 0 {
+		return "export {};\n"
+	}
+	return b.String()
 }
 
 // ResolveModulePath resolves a bare module specifier to a file path by

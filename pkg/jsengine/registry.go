@@ -241,11 +241,15 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		return nil
 	}
 
-	// Build shared runtime if not already set.
+	modules, err := BundleComponentModules(paths)
+	if err != nil {
+		return fmt.Errorf("batch bundling sources: %w", err)
+	}
+
 	if r.SharedRuntime() == "" {
 		nodeModulesDir := FindNodeModules(paths[0])
 		if nodeModulesDir != "" {
-			rt, err := BundleSharedRuntime(nodeModulesDir)
+			rt, err := BundleSharedRuntime(nodeModulesDir, modules)
 			if err != nil {
 				return fmt.Errorf("building shared runtime: %w", err)
 			}
@@ -253,10 +257,7 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		}
 	}
 
-	modules, err := BundleComponentModules(paths)
-	if err != nil {
-		return fmt.Errorf("batch bundling sources: %w", err)
-	}
+	modules = RewriteModuleImports(modules)
 
 	for _, source := range modules {
 		if tagName, ok := discoverTagNameFast(source); ok {

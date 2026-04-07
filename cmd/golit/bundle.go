@@ -186,13 +186,20 @@ func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) er
 		return nil
 	}
 
-	// Build the shared runtime first.
 	nodeModulesDir := jsengine.FindNodeModules(paths[0])
 	if nodeModulesDir == "" {
 		return fmt.Errorf("node_modules not found from %s", paths[0])
 	}
 
-	runtime, err := jsengine.BundleSharedRuntime(nodeModulesDir, opts)
+	// Build thin component modules first (externals only need glob patterns).
+	modules, err := jsengine.BundleComponentModules(paths, opts)
+	if err != nil {
+		return fmt.Errorf("batch bundling modules: %w", err)
+	}
+
+	// Build shared runtime from the thin modules' actual import specifiers
+	// (must happen before rewriting imports to @golit/runtime).
+	runtime, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules, opts)
 	if err != nil {
 		return fmt.Errorf("building shared runtime: %w", err)
 	}
@@ -203,11 +210,8 @@ func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) er
 	}
 	fmt.Fprintf(os.Stderr, "golit: shared runtime -> %s (%d bytes)\n", runtimePath, len(runtime))
 
-	// Build thin component modules.
-	modules, err := jsengine.BundleComponentModules(paths, opts)
-	if err != nil {
-		return fmt.Errorf("batch bundling modules: %w", err)
-	}
+	// Rewrite import specifiers to @golit/runtime for the output modules.
+	modules = jsengine.RewriteModuleImports(modules)
 
 	count := 0
 	for srcPath, mod := range modules {
