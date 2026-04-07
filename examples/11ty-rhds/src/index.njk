@@ -1,0 +1,30 @@
+---
+layout: base.njk
+title: Home
+---
+{% block imports %}
+  <link rel="stylesheet" href="/rhds/css/rh-tile-lightdom.css">
+  <script type="module">
+    import '@lit-labs/ssr-client/lit-element-hydrate-support.js';
+    import '@rhds/elements/rh-tile/rh-tile.js';
+  </script>
+  <style>
+    .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--rh-space-2xl, 32px);
+      padding: var(--rh-space-2xl, 32px) var(--rh-space-xl, 24px);
+    }
+  </style>
+{% endblock %}
+
+{% block main %}
+<div class="tile-grid">
+  {% for post in collections.element %}
+  <rh-tile>
+    <h2 slot="headline"><a href="{{ post.url }}">{{ post.data.title }}</a></h2>
+    <code>&lt;{{ post.fileSlug }}&gt;</code>
+  </rh-tile>
+  {% endfor %}
+</div>
+{% endblock %}

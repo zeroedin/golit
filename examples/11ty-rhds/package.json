@@ -1,0 +1,17 @@
+{
+  "name": "11ty-rhds",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npx @11ty/eleventy",
+    "serve": "npx @11ty/eleventy --serve"
+  },
+  "dependencies": {
+    "@rhds/elements": "^4.0.2",
+    "lit": "^3.3.2"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.1.2"
+  }
+}
