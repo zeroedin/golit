@@ -297,3 +297,63 @@ func TestEngine_UnregisteredElement(t *testing.T) {
 		t.Error("expected error for unregistered element")
 	}
 }
+
+func TestEngine_RenderElement_EmptyRender_HasRootMarkers(t *testing.T) {
+	source := `
+		import { LitElement } from 'lit';
+		class EmptyEl extends LitElement {}
+		customElements.define('empty-el', EmptyEl);
+	`
+	bundle, err := BundleSource(source)
+	if err != nil {
+		t.Fatalf("bundling: %v", err)
+	}
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatalf("loading bundle: %v", err)
+	}
+
+	result, err := engine.RenderElement("empty-el", map[string]string{})
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(result.HTML, "<!--lit-part-->") {
+		t.Errorf("expected root <!--lit-part--> marker in HTML for component with no render(), got: %q", result.HTML)
+	}
+	if !strings.Contains(result.HTML, "<!--/lit-part-->") {
+		t.Errorf("expected root <!--/lit-part--> marker in HTML for component with no render(), got: %q", result.HTML)
+	}
+}
+
+func TestEngine_RenderElement_WithRender_HasDigestMarkers(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := engine.RenderElement("my-greeting", map[string]string{"name": "Test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(result.HTML, "<!--lit-part ") {
+		t.Errorf("expected <!--lit-part DIGEST--> marker in HTML, got: %q", result.HTML[:min(200, len(result.HTML))])
+	}
+	if !strings.Contains(result.HTML, "<!--/lit-part-->") {
+		t.Errorf("expected <!--/lit-part--> closing marker in HTML, got: %q", result.HTML[:min(200, len(result.HTML))])
+	}
+}
