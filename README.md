@@ -288,14 +288,17 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle Lit components for SSR. When given a directory, automatically discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) containing all shared dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
+Pre-bundle Lit components for SSR. All output uses the `.golit.module.js` format, consumable via `--defs`.
+
+- **Directory:** automatically discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) plus thin per-component `.golit.module.js` files that import from it.
+- **Single file:** produces a self-contained `.golit.module.js` (no shared runtime needed for one component).
 
 ```bash
-golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
-golit bundle <source.ts|js> [--out <file>] [--minify]
+golit bundle <src-dir/> [--out <modules-dir/>] [--minify]
+golit bundle <source.ts|js> [--out <file.golit.module.js>] [--minify]
 ```
 
-The three-pass build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
+The directory build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
 
 ### `golit render`
 
