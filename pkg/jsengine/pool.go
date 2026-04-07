@@ -41,27 +41,27 @@ func NewEnginePool(size int) (*EnginePool, error) {
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
+	runtimeExternals := registry.RuntimeExternals()
+	sharedRuntime := registry.SharedRuntime()
+	dynamicModules := registry.DynamicModules()
 
 	drained := make([]*Engine, 0, p.size)
 
 	for i := 0; i < p.size; i++ {
 		e := <-p.engines
 		e.SetPreloadModules(preloadModules)
-		e.SetRuntimeExternals(registry.RuntimeExternals())
+		e.SetRuntimeExternals(runtimeExternals)
 		for _, pb := range preloadBundles {
 			_ = e.LoadBundle(pb)
 		}
-		// Load shared runtime once per engine before any components.
-		if rt := registry.SharedRuntime(); rt != "" && !e.loaded["@golit/runtime"] {
-			if err := e.LoadModule("@golit/runtime", rt); err != nil {
+		if sharedRuntime != "" && !e.loaded["@golit/runtime"] {
+			if err := e.LoadModule("@golit/runtime", sharedRuntime); err != nil {
 				fmt.Fprintf(os.Stderr, "golit: warning: loading shared runtime: %v\n", err)
 			} else {
 				e.loaded["@golit/runtime"] = true
 			}
 		}
-		// Register dynamic modules as named QJS modules so native
-		// import("specifier") resolution works for CSS/JS modules.
-		for specifier, source := range registry.DynamicModules() {
+		for specifier, source := range dynamicModules {
 			if !e.loaded[specifier] {
 				if err := e.LoadModule(specifier, source); err != nil {
 					fmt.Fprintf(os.Stderr, "golit: warning: loading dynamic module %s: %v\n", specifier, err)
