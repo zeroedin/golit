@@ -166,6 +166,7 @@ func parseMetafilePackages(metafile string) ([]string, error) {
 // goes through node_modules. Returns "" if the path is not from node_modules.
 // Handles scoped packages (@scope/pkg) and unscoped (pkg).
 func extractNodeModulesPackage(inputPath string) string {
+	inputPath = filepath.ToSlash(inputPath)
 	const marker = "node_modules/"
 	idx := strings.LastIndex(inputPath, marker)
 	if idx < 0 {
