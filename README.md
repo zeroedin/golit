@@ -101,10 +101,10 @@ golit transform public/ --sources node_modules/@rhds/elements/elements/
 
 ### Mode 4: Pre-Bundled
 
-For CI/CD or when you want maximum transform speed, pre-bundle components and point at the bundles directory.
+For CI/CD or when you want maximum transform speed, pre-bundle components with a shared runtime and point at the output directory. The `--shared-runtime` flag produces thin ES modules that share a single copy of Lit, `@lit/context`, and other common dependencies.
 
 ```bash
-golit bundle node_modules/@rhds/elements/elements/rh-badge/rh-badge.js --out bundles/
+golit bundle --shared-runtime node_modules/@rhds/elements/elements/ --out bundles/
 golit transform public/ --defs bundles/
 ```
 
@@ -185,7 +185,7 @@ If **`GOLIT_SERVE_URL`** is **unset**, the examples fall back to running **`goli
 | Variable | Purpose |
 | -------- | -------- |
 | **`GOLIT_SERVE_URL`** | Base URL of `golit serve` (e.g. `http://127.0.0.1:9777`). When set, middleware uses HTTP instead of exec. |
-| **`GOLIT_DEFS`** | Directory of `.golit.bundle.js` files (used by `golit serve` and cold-path transform). |
+| **`GOLIT_DEFS`** | Directory of `.golit.module.js` files and `_runtime.golit.module.js` (used by `golit serve` and cold-path transform). |
 | **`GOLIT_BIN`** | Path to `golit` binary for the cold path only. |
 | **`GOLIT_DISABLED`** | If set (e.g. `1`), skip SSR and serve untransformed HTML (used by benchmarks for A/B comparison). |
 
@@ -198,7 +198,7 @@ QuickJS SSR (used by **`golit transform`** and **`golit serve`** rendering) expo
 | **`GOLIT_FETCH_TIMEOUT_SEC`** | Per-request timeout in seconds (default **10**, clamped). |
 | **`GOLIT_FETCH_MAX_BODY_BYTES`** | Max response body bytes read (default **16 MiB**, capped). |
 
-After upgrading golit, regenerate pre-bundled defs (e.g. **`make bundle`** in **`examples/hugo-rhds`**) so injected **`domshim.js`** matches the new binary.
+After upgrading golit, regenerate pre-bundled modules (e.g. **`make bundle`** in **`examples/hugo-rhds`**) so the shared runtime and domshim match the new binary.
 
 ### PHP example
 
@@ -276,7 +276,7 @@ golit transform <html-dir> [options]
 ```
 
 Options:
-- `--defs <dir>` -- Directory of pre-bundled `.golit.bundle.js` files
+- `--defs <dir>` -- Directory of pre-bundled `.golit.module.js` files (and `_runtime.golit.module.js`)
 - `--sources <dir>` -- Directory of component `.js`/`.ts` source files (auto-bundles)
 - `--importmap <file>` -- Import map JSON file for resolving bare-module specifiers
 - `--out <dir>` -- Output to a separate directory (default: in-place)
@@ -288,25 +288,25 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle a Lit component for SSR. Produces a `.golit.bundle.js` file.
+Pre-bundle Lit components for SSR. With `--shared-runtime` (recommended), produces a shared runtime module (`_runtime.golit.module.js`) containing Lit, `@lit/context`, and other common dependencies, plus thin per-component `.golit.module.js` files that import from the shared runtime.
 
 ```bash
+golit bundle --shared-runtime <src-dir/> [--out <bundles-dir/>] [--minify]
 golit bundle <source.ts|js> [--out <file>] [--minify]
-golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
 ```
 
-The bundle includes the component, Lit runtime, DOM shim, and template collector -- everything needed for the QJS engine to render the component.
+The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate Lit classes and decorator state across components.
 
 ### `golit render`
 
 Render a single HTML fragment to stdout. Useful for testing and scripting.
-Requires pre-built bundles (see `golit bundle` above).
+Requires pre-built modules (see `golit bundle` above).
 
 ```bash
 # First, bundle the component(s) you want to render
-golit bundle node_modules/@rhds/elements/elements/rh-badge/rh-badge.js --out bundles/
+golit bundle --shared-runtime node_modules/@rhds/elements/elements/ --out bundles/
 
-# Then render a fragment using the pre-built bundles
+# Then render a fragment using the pre-built modules
 golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 ```
 
@@ -374,12 +374,12 @@ HTML with import map + module scripts
     | golit transform
     | 1. Parse HTML, find <script type="importmap"> and <script type="module">
     | 2. Resolve bare-module specifiers to file paths via import map
-    | 3. Bundle each component with esbuild (component + Lit + DOM shim)
-    | 4. For each custom element in HTML:
-    |    a. Load bundle into QJS (QuickJS via WASM)
-    |    b. Instantiate component, set attributes, call render()
-    |    c. Collect rendered HTML + CSS
-    |    d. Wrap in <template shadowroot="open" shadowrootmode="open">
+    | 3. Load shared runtime module (@golit/runtime) into QJS once
+    | 4. Load thin component modules (import from shared runtime)
+    | 5. For each custom element in HTML:
+    |    a. Instantiate component, set attributes, call render()
+    |    b. Collect rendered HTML + CSS
+    |    c. Wrap in <template shadowroot="open" shadowrootmode="open">
     v
 HTML with Declarative Shadow DOM
     |
@@ -392,8 +392,8 @@ Instant paint -> Lit hydrates -> Interactive
 
 golit uses three key technologies:
 
-- **esbuild** (Go-native) -- Bundles TypeScript/JavaScript components with all dependencies into a single file. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
-- **QJS** (QuickJS via WebAssembly/Wazero) -- Executes the bundled component code in a sandboxed JavaScript environment. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
+- **esbuild** (Go-native) -- Produces a shared runtime module (Lit + context + reactive-element + tslib) and thin per-component ES modules. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
+- **QJS** (QuickJS via WebAssembly/Wazero) -- Loads the shared runtime module once via `JS_SetModuleLoaderFunc`, then evaluates thin component modules that import from it. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
 - **golang.org/x/net/html** -- Parses and transforms HTML documents, inserting Declarative Shadow DOM templates.
 
 ### Output Format
@@ -425,7 +425,7 @@ golit produces Lit-compatible Declarative Shadow DOM with hydration markers:
 ```
 cmd/golit/              CLI binary (bundle, compile, transform, render, serve, version)
 pkg/jsengine/           QJS engine, esbuild bundler, DOM shim, template collector,
-                        import map parser, bundle registry
+                        import map parser, module registry, shared runtime loader
 pkg/transformer/        HTML file walker, component discovery, DSD expansion
 ```
 
