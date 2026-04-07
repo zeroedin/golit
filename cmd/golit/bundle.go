@@ -55,28 +55,28 @@ func runBundle(args []string) error {
 }
 
 func bundleFile(source, outPath string, opts jsengine.BundleOptions) error {
-	bundle, err := jsengine.BundleComponent(source, opts)
+	mod, err := jsengine.BundleComponentModule(source, opts)
 	if err != nil {
 		return err
 	}
 
 	if outPath == "" {
 		ext := filepath.Ext(source)
-		outPath = strings.TrimSuffix(source, ext) + ".golit.bundle.js"
+		outPath = strings.TrimSuffix(source, ext) + ".golit.module.js"
 	} else {
 		info, err := os.Stat(outPath)
 		if err == nil && info.IsDir() {
 			base := filepath.Base(source)
 			ext := filepath.Ext(base)
-			outPath = filepath.Join(outPath, strings.TrimSuffix(base, ext)+".golit.bundle.js")
+			outPath = filepath.Join(outPath, strings.TrimSuffix(base, ext)+".golit.module.js")
 		}
 	}
 
-	if err := jsengine.SaveBundle(bundle, outPath); err != nil {
+	if err := jsengine.SaveBundle(mod, outPath); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "golit: bundled %s -> %s (%d bytes)\n", source, outPath, len(bundle))
+	fmt.Fprintf(os.Stderr, "golit: module %s -> %s (%d bytes)\n", source, outPath, len(mod))
 	return nil
 }
 

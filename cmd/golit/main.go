@@ -66,8 +66,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `golit - Lit SSR in pure Go (QJS engine)
 
 Usage:
-  golit bundle <source.ts|js> [--out <file.golit.bundle.js>] [--minify]
-  golit bundle <src-dir/> [--out <bundles-dir/>] [--minify]
+  golit bundle <source.ts|js> [--out <file.golit.module.js>] [--minify]
+  golit bundle <src-dir/> [--out <modules-dir/>] [--minify]
   golit compile --defs <bundles-dir> [--out <file.golit.compiled.js>] [--minify]
   golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
   golit render --defs <bundles-dir> '<html-fragment>'
