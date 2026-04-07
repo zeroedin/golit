@@ -123,6 +123,7 @@ func (r *Registry) LoadDir(dir string) error {
 			for _, target := range targets {
 				modPath, err := ResolveModulePath(target, absDir)
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: could not resolve dynamic module %s from %s: %v\n", target, absDir, err)
 					continue
 				}
 				esm, err := BundleStandaloneModule(modPath)
