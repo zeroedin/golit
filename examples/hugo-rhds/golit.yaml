@@ -1,6 +1,7 @@
 transform:
   defs: bundles/
   verbose: true
+  concurrency: true
   preload:
     - prism-esm
   ignore:
