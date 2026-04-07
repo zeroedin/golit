@@ -108,6 +108,31 @@ golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 golit transform public/ --defs bundles/
 ```
 
+### CDN Import Maps vs Local Resolution
+
+golit needs **local files on disk** to bundle components for SSR. If your HTML import map uses CDN URLs (common for production browser delivery), golit cannot resolve those to local source files.
+
+**Two approaches:**
+
+1. **Pre-bundle (recommended for CI/CD):** Use `golit bundle <src-dir/> --out <dir/>` to pre-bundle from `node_modules/` directly. Then use `--defs <dir/>` at transform time. The import map in your HTML is irrelevant to golit — esbuild resolves everything from `node_modules/`.
+
+2. **Local import map (for auto-discovery):** Keep the CDN import map in your HTML for the browser, but provide a separate local import map via `--importmap` (or `importmap:` in golit.yaml) that maps the same specifiers to `node_modules/` paths:
+
+   ```json
+   {
+     "imports": {
+       "@rhds/elements/": "./node_modules/@rhds/elements/elements/",
+       "@lit-labs/ssr-client/": "./node_modules/@lit-labs/ssr-client/"
+     }
+   }
+   ```
+
+   ```bash
+   golit transform public/ --importmap importmap.local.json
+   ```
+
+   golit reads the `<script type="module">` imports from your HTML, resolves them through the local import map (instead of the CDN one in the HTML), and bundles from local files.
+
 ### Combining Modes
 
 All flags are optional and combinable:
@@ -132,15 +157,20 @@ hugo build && golit transform public/ --importmap importmap.json
 
 ### Try the Hugo example
 
-A complete working example using [Red Hat Design System](https://ux.redhat.com) components is included in `examples/hugo-rhds/`. To try it:
+A complete working example using [Red Hat Design System](https://ux.redhat.com) components is included in `examples/hugo-rhds/`. Two build modes are available:
 
 ```bash
 cd examples/hugo-rhds
 npm install
+
+# Pre-bundled (shared runtime + thin modules, then transform)
 make serve
+
+# Auto-discovery (no pre-bundle step, discovers from HTML import maps)
+make serve-auto
 ```
 
-This builds golit from source, runs Hugo, transforms all custom elements into Declarative Shadow DOM, and serves the result at `http://localhost:8080`. Open it in a browser to see fully server-side rendered web components -- no client JS needed for first paint.
+Both produce fully server-side rendered web components at `http://localhost:8080`. The auto-discovery path uses a local import map (`importmap.local.json`) to resolve CDN specifiers to `node_modules/` for SSR bundling.
 
 For authoring content without SSR (faster iteration with Hugo's live-reload dev server):
 

@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@lit-labs/ssr-client/": "./node_modules/@lit-labs/ssr-client/",
+    "@rhds/elements/": "./node_modules/@rhds/elements/elements/",
+    "prism-esm": "./node_modules/prism-esm/prism.js",
+    "prism-esm/": "./node_modules/prism-esm/"
+  }
+}

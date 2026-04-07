@@ -24,6 +24,15 @@ serve: build
 	@echo "Serving public/ at http://localhost:8080"
 	python3 -m http.server 8080 --directory public
 
+## build-auto: Hugo + golit auto-discovery (no pre-bundle, discovers from HTML import maps)
+build-auto: golit-build hugo
+	$(GOLIT) transform public/ --config golit-auto.yaml
+
+## serve-auto: Auto-discovery build then serve on port 8080
+serve-auto: build-auto
+	@echo "Serving public/ at http://localhost:8080 (auto-discovered)"
+	python3 -m http.server 8080 --directory public
+
 ## serve-dev: Hugo dev server (no SSR, for authoring)
 serve-dev:
 	hugo server --buildDrafts
