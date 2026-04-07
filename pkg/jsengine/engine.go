@@ -230,6 +230,8 @@ func (e *Engine) shimDynamicImports(code string) string {
 
 // shimRuntimeImport checks if a dynamic import() at the given position
 // matches a runtime external package and rewrites it to import("@golit/runtime").
+// Skips specifiers that have a standalone module registered (e.loaded),
+// allowing QJS native module resolution to handle them instead.
 func (e *Engine) shimRuntimeImport(code string, matchStart int) (string, int) {
 	for _, quote := range []byte{'"', '\''} {
 		prefix := `import(` + string(quote)
@@ -243,6 +245,9 @@ func (e *Engine) shimRuntimeImport(code string, matchStart int) (string, int) {
 			continue
 		}
 		specifier := code[matchStart+len(prefix) : matchStart+len(prefix)+end]
+		if e.loaded[specifier] {
+			return "", 0
+		}
 		if matchesExternals(specifier, e.runtimeExternals) {
 			full := code[matchStart : matchStart+len(prefix)+end+len(closeStr)]
 			rewritten := `import(` + string(quote) + `@golit/runtime` + string(quote) + `)/*golit-runtime:` + full + `*/`
