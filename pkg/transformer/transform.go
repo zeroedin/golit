@@ -172,6 +172,9 @@ func TransformDir(dir string, opts Options) (*Result, error) {
 	for _, target := range registry.DynamicImportTargets() {
 		modPath, err := jsengine.ResolveModulePath(target, dir)
 		if err != nil {
+			if opts.Verbose {
+				fmt.Fprintf(os.Stderr, "golit: warning: could not resolve dynamic import target %s: %v\n", target, err)
+			}
 			continue
 		}
 		bundle, err := jsengine.BundlePreload(modPath, target)
