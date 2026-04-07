@@ -1018,25 +1018,33 @@ func extractDynamicImportTargets(modules map[string]string) []string {
 	var targets []string
 
 	for _, source := range modules {
-		for _, line := range strings.Split(source, "\n") {
-			trimmed := strings.TrimSpace(line)
-			for _, quote := range []string{`"`, `'`} {
-				prefix := "import(" + quote
-				idx := strings.Index(trimmed, prefix)
-				if idx < 0 {
-					continue
-				}
-				rest := trimmed[idx+len(prefix):]
-				end := strings.Index(rest, quote+")")
-				if end < 0 {
-					continue
-				}
-				spec := rest[:end]
-				if !isLocalOrRuntime(spec) && !seen[spec] {
-					seen[spec] = true
-					targets = append(targets, spec)
-				}
+		pos := 0
+		for pos < len(source) {
+			idx := strings.Index(source[pos:], "import(")
+			if idx < 0 {
+				break
 			}
+			start := pos + idx + len("import(")
+			if start >= len(source) {
+				break
+			}
+			quote := source[start]
+			if quote != '"' && quote != '\'' {
+				pos = start
+				continue
+			}
+			closeStr := string(quote) + ")"
+			end := strings.Index(source[start+1:], closeStr)
+			if end < 0 {
+				pos = start + 1
+				continue
+			}
+			spec := source[start+1 : start+1+end]
+			if !isLocalOrRuntime(spec) && !seen[spec] {
+				seen[spec] = true
+				targets = append(targets, spec)
+			}
+			pos = start + 1 + end + len(closeStr)
 		}
 	}
 	sort.Strings(targets)

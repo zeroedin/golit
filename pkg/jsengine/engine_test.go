@@ -210,6 +210,81 @@ func TestShimDynamicImports_NoModules(t *testing.T) {
 	}
 }
 
+func TestShimDynamicImports_RuntimeExternals(t *testing.T) {
+	e := &Engine{runtimeExternals: []string{
+		"@rhds/tokens", "@rhds/tokens/*",
+		"@rhds/icons", "@rhds/icons/*",
+	}}
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "exact match rewrites to runtime",
+			input: `import("@rhds/tokens")`,
+			want:  `import("@golit/runtime")/*golit-runtime:import("@rhds/tokens")*/`,
+		},
+		{
+			name:  "subpath rewrites to runtime",
+			input: `import("@rhds/tokens/css/default-theme.css.js")`,
+			want:  `import("@golit/runtime")/*golit-runtime:import("@rhds/tokens/css/default-theme.css.js")*/`,
+		},
+		{
+			name:  "single quotes work too",
+			input: `import('@rhds/icons/ui/check.js')`,
+			want:  `import('@golit/runtime')/*golit-runtime:import('@rhds/icons/ui/check.js')*/`,
+		},
+		{
+			name:  "non-external package unchanged",
+			input: `import("@other/pkg")`,
+			want:  `import("@other/pkg")`,
+		},
+		{
+			name:  "local import unchanged",
+			input: `import("./local.js")`,
+			want:  `import("./local.js")`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := e.shimDynamicImports(tc.input)
+			if got != tc.want {
+				t.Errorf("got:\n  %s\nwant:\n  %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestShimDynamicImports_PreloadTakesPrecedence(t *testing.T) {
+	e := &Engine{
+		preloadModules:   []string{"prism-esm"},
+		runtimeExternals: []string{"prism-esm", "prism-esm/*", "@rhds/tokens", "@rhds/tokens/*"},
+	}
+
+	got := e.shimDynamicImports(`import("prism-esm/components/prism-css.js")`)
+	want := `Promise.resolve(globalThis.__preloadedModules["prism-esm"] || {})/*golit-shimmed:import("prism-esm/components/prism-css.js")*/`
+	if got != want {
+		t.Errorf("preload should take precedence over runtime externals\ngot:\n  %s\nwant:\n  %s", got, want)
+	}
+
+	got = e.shimDynamicImports(`import("@rhds/tokens/css/default-theme.css.js")`)
+	want = `import("@golit/runtime")/*golit-runtime:import("@rhds/tokens/css/default-theme.css.js")*/`
+	if got != want {
+		t.Errorf("non-preloaded externals should use runtime rewrite\ngot:\n  %s\nwant:\n  %s", got, want)
+	}
+}
+
+func TestShimDynamicImports_BothEmpty(t *testing.T) {
+	e := &Engine{}
+	input := `import("@rhds/tokens/css/default-theme.css.js")`
+	if got := e.shimDynamicImports(input); got != input {
+		t.Errorf("expected no change when both preload and externals are empty, got %q", got)
+	}
+}
+
 func TestEngine_UnregisteredElement(t *testing.T) {
 	engine, err := NewEngine()
 	if err != nil {
