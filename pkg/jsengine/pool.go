@@ -56,7 +56,11 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 		if already[target] {
 			continue
 		}
-		modPath, err := ResolveModulePath(target, ".")
+		baseDir := registry.BaseDir()
+		if baseDir == "" {
+			baseDir = "."
+		}
+		modPath, err := ResolveModulePath(target, baseDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "golit: warning: cannot resolve dynamic import target %s: %v\n", target, err)
 			continue
