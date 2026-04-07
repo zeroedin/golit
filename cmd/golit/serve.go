@@ -7,23 +7,28 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
-	"github.com/zeroedin/golit"
+	"github.com/zeroedin/golit/pkg/jsengine"
+	"github.com/zeroedin/golit/pkg/transformer"
 )
 
-// runServe starts an HTTP server with a long-lived Renderer for POST /render.
-// Reduces per-request cold start vs shelling out to `golit transform` each time.
+// runServe starts an HTTP server with a pool of QJS engines for POST /render.
+// Each concurrent request gets its own engine from the pool, enabling true
+// parallel rendering. Defaults to runtime.NumCPU() workers.
 func runServe(args []string) error {
 	var (
-		defsDir    string
-		sourcesDir string
-		listen     = "127.0.0.1:9777"
-		listenFlag bool
-		ignored    []string
+		defsDir     string
+		sourcesDir  string
+		listen      = "127.0.0.1:9777"
+		listenFlag  bool
+		ignored     []string
+		preload     []string
+		concurrency int
 	)
 
 	for i := 0; i < len(args); i++ {
@@ -53,6 +58,26 @@ func runServe(args []string) error {
 			}
 			ignored = append(ignored, args[i+1])
 			i++
+		case "--preload":
+			if i+1 >= len(args) {
+				return fmt.Errorf("--preload requires a module name argument")
+			}
+			preload = append(preload, args[i+1])
+			i++
+		case "--concurrency", "-j":
+			if i+1 < len(args) {
+				if n, err := strconv.Atoi(args[i+1]); err == nil {
+					if n < 1 {
+						return fmt.Errorf("--concurrency value must be a positive integer")
+					}
+					concurrency = n
+					i++
+				}
+			}
+			if concurrency == 0 {
+				concurrency = runtime.NumCPU()
+			}
+			i++
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return fmt.Errorf("unknown flag: %s", args[i])
@@ -72,18 +97,39 @@ func runServe(args []string) error {
 			listen = v
 		}
 	}
-
-	renderer, err := golit.NewRenderer(golit.RendererOptions{
-		DefsDir:    defsDir,
-		SourcesDir: sourcesDir,
-		Ignored:    ignored,
-	})
-	if err != nil {
-		return fmt.Errorf("golit serve: init renderer: %w", err)
+	if concurrency == 0 {
+		concurrency = runtime.NumCPU()
 	}
-	defer renderer.Close()
 
-	var mu sync.Mutex
+	registry := jsengine.NewRegistry()
+
+	if err := registry.LoadDir(defsDir); err != nil {
+		return fmt.Errorf("golit serve: loading bundles: %w", err)
+	}
+
+	if sourcesDir != "" {
+		if err := registry.LoadSourceDir(sourcesDir); err != nil {
+			return fmt.Errorf("golit serve: loading sources: %w", err)
+		}
+	}
+
+	ignoredMap := make(map[string]bool, len(ignored))
+	for _, tag := range ignored {
+		ignoredMap[tag] = true
+	}
+
+	pool, err := jsengine.NewEnginePool(concurrency)
+	if err != nil {
+		return fmt.Errorf("golit serve: creating engine pool: %w", err)
+	}
+	defer pool.Close()
+
+	if err := pool.PreloadAll(registry, preload); err != nil {
+		return fmt.Errorf("golit serve: preloading pool: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "golit serve: initialized %d engine workers\n", concurrency)
+
 	const maxBody = 32 << 20 // 32 MiB
 
 	mux := http.NewServeMux()
@@ -112,9 +158,10 @@ func runServe(args []string) error {
 			return
 		}
 
-		mu.Lock()
-		out, err := renderer.RenderHTML(string(body))
-		mu.Unlock()
+		engine := pool.Get()
+		out, err := transformer.RenderHTMLWithEngine(string(body), engine, registry, ignoredMap)
+		pool.Put(engine)
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
