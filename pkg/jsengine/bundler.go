@@ -205,7 +205,7 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 		return "", err
 	}
 
-	code, hasTopLevelAwait := stripESMExports(esm)
+	code, hasTopLevelAwait, _ := stripESMExports(esm)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
@@ -267,11 +267,12 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 }
 
 // stripESMExports removes export keywords from bundled ESM output so it
-// can be evaluated in QJS script mode. Since esbuild has already bundled
-// all dependencies, there are no import statements to handle.
-// Also detects top-level await (await at column 0, not inside functions).
-func stripESMExports(code string) (string, bool) {
+// can be evaluated in QJS script mode. Returns the stripped code, whether
+// top-level await was found, and whether a default export was found.
+// Default exports are assigned to __golit_default_export for later capture.
+func stripESMExports(code string) (string, bool, bool) {
 	hasTopLevelAwait := false
+	hasDefaultExport := false
 	inExportBlock := false
 	var b strings.Builder
 	b.Grow(len(code))
@@ -312,7 +313,8 @@ func stripESMExports(code string) (string, bool) {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "export default ") {
-			b.WriteString(strings.Replace(line, "export default ", "", 1))
+			b.WriteString(strings.Replace(line, "export default ", "var __golit_default_export = ", 1))
+			hasDefaultExport = true
 			continue
 		}
 		if strings.HasPrefix(trimmed, "export var ") ||
@@ -334,7 +336,7 @@ func stripESMExports(code string) (string, bool) {
 		b.WriteString(line)
 	}
 
-	return b.String(), hasTopLevelAwait
+	return b.String(), hasTopLevelAwait, hasDefaultExport
 }
 
 
@@ -475,7 +477,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 	}
 
 	code := string(result.OutputFiles[0].Contents)
-	code, hasTopLevelAwait := stripESMExports(code)
+	code, hasTopLevelAwait, _ := stripESMExports(code)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
@@ -495,18 +497,24 @@ func BundlePreload(modulePath string, name string) (string, error) {
 
 	exportNames := extractESMExportNames(esm)
 
-	code, hasTopLevelAwait := stripESMExports(esm)
+	code, hasTopLevelAwait, hasDefaultExport := stripESMExports(esm)
 	if hasTopLevelAwait {
 		code = "(async () => {\n" + code + "\n})();\n"
 	}
 
 	var capture strings.Builder
 	capture.WriteString(fmt.Sprintf("\nglobalThis.__preloadedModules[%q] = {", name))
-	for i, n := range exportNames {
-		if i > 0 {
+	first := true
+	if hasDefaultExport {
+		capture.WriteString("default: (typeof __golit_default_export !== 'undefined' ? __golit_default_export : undefined)")
+		first = false
+	}
+	for _, n := range exportNames {
+		if !first {
 			capture.WriteString(", ")
 		}
 		capture.WriteString(fmt.Sprintf("%s: (typeof %s !== 'undefined' ? %s : undefined)", n, n, n))
+		first = false
 	}
 	capture.WriteString("};\n")
 
