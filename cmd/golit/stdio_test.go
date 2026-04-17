@@ -5,6 +5,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -24,7 +25,11 @@ func projectRoot(t *testing.T) string {
 
 func buildGolit(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "golit")
+	name := "golit"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), name)
 	cmd := exec.Command("go", "build", "-o", bin, ".")
 	cmd.Dir = filepath.Join(projectRoot(t), "cmd", "golit")
 	out, err := cmd.CombinedOutput()
