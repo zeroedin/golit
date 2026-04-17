@@ -6,6 +6,7 @@
 //	golit bundle <source.ts|js> [--out <file>] [--minify]
 //	golit transform <html-dir> --defs <bundles-dir> [--out <dir>] [--verbose]
 //	golit render --defs <bundles-dir> '<html-fragment>'
+//	echo '<html>' | golit render --defs <bundles-dir>
 //	golit version
 package main
 
@@ -71,6 +72,7 @@ Usage:
   golit compile --defs <bundles-dir> [--out <file.golit.compiled.js>] [--minify]
   golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
   golit render --defs <bundles-dir> '<html-fragment>'
+  echo '<html>' | golit render --defs <bundles-dir>
   golit render --component-js '<source>' '<html-fragment>'
   golit serve --defs <bundles-dir> [--listen host:port]
   golit version
@@ -125,6 +127,9 @@ Examples:
 
   # Render a single element
   golit render --defs bundles/ '<my-greeting name="World"></my-greeting>'
+
+  # Pipe large HTML from stdin (avoids ARG_MAX limits)
+  cat page.html | golit render --defs bundles/
 
   # Long-lived SSR (warm Renderer) for middleware integration
   golit serve --defs bundles/ --listen 127.0.0.1:9777
