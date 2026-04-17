@@ -193,18 +193,22 @@ Each demo includes a small Lit component (`<my-counter>`), `golit bundle` output
 
 ### Warm path: `golit serve`
 
-By default, **containers** and **`make serve`** start a long-lived **`golit serve`** process that keeps one [`Renderer`](https://pkg.go.dev/github.com/zeroedin/golit#Renderer) warm. The app posts each full HTML document to `POST /render` (see environment variable **`GOLIT_SERVE_URL`**). That avoids spawning **`golit transform`** on every request.
+By default, **containers** and **`make serve`** start a long-lived **`golit serve`** process that keeps a warm engine pool. The app posts each full HTML document to `POST /render` (see environment variable **`GOLIT_SERVE_URL`**). That avoids spawning **`golit transform`** on every request.
 
+**HTTP mode** (default):
 - **`GET /health`** -- readiness probe
 - **`POST /render`** -- body is full HTML; response is transformed HTML
+
+**Stdio mode** (`--stdio`): NUL-delimited stdin/stdout protocol for same-machine integration without HTTP overhead.
 
 CLI usage (same binary as `transform` / `bundle`):
 
 ```bash
 golit serve --defs bundles/ --listen 127.0.0.1:9777
+golit serve --defs bundles/ --stdio
 ```
 
-Flags: **`--defs`** (or **`GOLIT_DEFS`**), **`--listen`** (or **`GOLIT_SERVE_LISTEN`**; default `127.0.0.1:9777`), **`--sources`**, repeatable **`--ignore`**.
+Flags: **`--defs`** (or **`GOLIT_DEFS`**), **`--listen`** (or **`GOLIT_SERVE_LISTEN`**; default `127.0.0.1:9777`), **`--stdio`**, **`--sources`**, repeatable **`--ignore`**.
 
 ### Cold path: `golit transform` per request
 
@@ -341,11 +345,20 @@ golit bundle node_modules/@rhds/elements/elements/ --out bundles/
 
 # Then render a fragment using the pre-built modules
 golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
+
+# Pipe large HTML from stdin (avoids OS ARG_MAX limits)
+cat page.html | golit render --defs bundles/
 ```
+
+When no HTML fragment argument is provided and stdin is a pipe, the fragment is read from stdin. This is useful for large HTML payloads that would exceed OS argument length limits.
 
 ### `golit serve`
 
-Run an HTTP server that holds a warm **`Renderer`** and transforms full HTML documents on each request. Intended for middleware integration (PHP, Ruby, etc.); avoids per-request **`golit transform`** process startup.
+Run a long-lived server that holds a warm engine pool and transforms full HTML documents on each request. Intended for middleware integration (PHP, Ruby, etc.); avoids per-request **`golit transform`** process startup.
+
+Two transport modes are available:
+
+#### HTTP mode (default)
 
 ```bash
 golit serve --defs bundles/ [--listen host:port]
@@ -353,6 +366,16 @@ golit serve --defs bundles/ [--listen host:port]
 
 - **`GET /health`** returns `200` and plain text `ok`.
 - **`POST /render`** accepts a full HTML document as the body; response is transformed HTML (`text/html`).
+
+#### Stdio mode
+
+```bash
+golit serve --defs bundles/ --stdio
+```
+
+Uses a NUL-delimited (`\0`) stdin/stdout protocol instead of HTTP. Write HTML terminated by `\0` to stdin, read rendered HTML terminated by `\0` from stdout. The process stays alive across requests with the same warm engine pool.
+
+Stdio mode is useful when the caller is on the same machine and HTTP overhead is unnecessary. Pipe liveness is implicit (broken pipe = process died), so no `/health` endpoint is needed. `--stdio` and `--listen` are mutually exclusive.
 
 See [Middleware examples](#middleware-examples-php-and-ruby) for how the PHP/Ruby demos wire this up.
 
