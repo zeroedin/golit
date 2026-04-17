@@ -86,7 +86,7 @@ func runRender(args []string) error {
 		fmt.Fprintf(os.Stderr, "golit: registered <%s> from inline source\n", tagName)
 	}
 
-	output, err := transformer.RenderFragment(fragment, registry)
+	output, err := transformer.RenderHTML(fragment, registry)
 	if err != nil {
 		return fmt.Errorf("rendering: %w", err)
 	}
