@@ -165,14 +165,15 @@ func runServe(args []string) error {
 		pool.Put(engine)
 		dur := time.Since(start)
 
+		w.Header().Set("Server-Timing", fmt.Sprintf(
+			`render;dur=%.1f, pool;desc="%d/%d busy"`,
+			float64(dur.Microseconds())/1000.0, active, pool.Size()))
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Server-Timing", fmt.Sprintf(
-			`render;dur=%.1f, pool;desc="%d/%d busy"`,
-			float64(dur.Microseconds())/1000.0, active, pool.Size()))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(out))
 	})
