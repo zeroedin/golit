@@ -99,6 +99,11 @@ func (p *EnginePool) Size() int {
 	return p.size
 }
 
+// Available returns the number of idle engines currently in the pool.
+func (p *EnginePool) Available() int {
+	return len(p.engines)
+}
+
 // Close releases all engines in the pool.
 func (p *EnginePool) Close() {
 	close(p.engines)

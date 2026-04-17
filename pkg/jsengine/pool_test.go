@@ -69,6 +69,38 @@ func TestEnginePool_PreloadAndRender(t *testing.T) {
 	}
 }
 
+func TestEnginePool_Available(t *testing.T) {
+	pool, err := NewEnginePool(3)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if got := pool.Available(); got != 3 {
+		t.Fatalf("Available = %d, want 3 (all idle)", got)
+	}
+
+	e1 := pool.Get()
+	if got := pool.Available(); got != 2 {
+		t.Fatalf("Available after 1 Get = %d, want 2", got)
+	}
+
+	e2 := pool.Get()
+	if got := pool.Available(); got != 1 {
+		t.Fatalf("Available after 2 Gets = %d, want 1", got)
+	}
+
+	pool.Put(e1)
+	if got := pool.Available(); got != 2 {
+		t.Fatalf("Available after Put = %d, want 2", got)
+	}
+
+	pool.Put(e2)
+	if got := pool.Available(); got != 3 {
+		t.Fatalf("Available after all returned = %d, want 3", got)
+	}
+}
+
 func TestEnginePool_ConcurrentRender(t *testing.T) {
 	bundle := bundleMyGreeting(t)
 

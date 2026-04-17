@@ -158,9 +158,16 @@ func runServe(args []string) error {
 			return
 		}
 
+		start := time.Now()
 		engine := pool.Get()
+		active := pool.Size() - pool.Available()
 		out, err := transformer.RenderHTMLWithEngine(string(body), engine, registry, ignoredMap)
 		pool.Put(engine)
+		dur := time.Since(start)
+
+		w.Header().Set("Server-Timing", fmt.Sprintf(
+			`render;dur=%.1f, pool;desc="%d/%d busy"`,
+			float64(dur.Microseconds())/1000.0, active, pool.Size()))
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
