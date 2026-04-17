@@ -3,6 +3,7 @@ package main
 import (
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,7 +12,11 @@ import (
 
 func buildGolit(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "golit")
+	name := "golit"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	bin := filepath.Join(t.TempDir(), name)
 	cmd := exec.Command("go", "build", "-o", bin, ".")
 	cmd.Dir = filepath.Join(projectRoot(t), "cmd", "golit")
 	out, err := cmd.CombinedOutput()
@@ -157,6 +162,7 @@ func TestRender_NoInputError(t *testing.T) {
 	bundleDir := buildTestBundles(t)
 
 	cmd := exec.Command(bin, "render", "--defs", bundleDir)
+	cmd.Stdin = strings.NewReader("")
 	var stderrBuf strings.Builder
 	cmd.Stderr = &stderrBuf
 	err := cmd.Run()

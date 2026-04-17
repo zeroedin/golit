@@ -51,9 +51,13 @@ func runRender(args []string) error {
 			return fmt.Errorf("checking stdin: %w", err)
 		}
 		if info.Mode()&os.ModeCharDevice == 0 {
-			data, err := io.ReadAll(os.Stdin)
+			const maxStdin = 32 << 20 // 32 MiB
+			data, err := io.ReadAll(io.LimitReader(os.Stdin, maxStdin+1))
 			if err != nil {
 				return fmt.Errorf("reading stdin: %w", err)
+			}
+			if len(data) > maxStdin {
+				return fmt.Errorf("stdin input too large (max %d MiB)", maxStdin>>20)
 			}
 			fragment = strings.TrimSpace(string(data))
 		}
