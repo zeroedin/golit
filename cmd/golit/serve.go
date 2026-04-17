@@ -26,6 +26,7 @@ func runServe(args []string) error {
 		sourcesDir  string
 		listen      = "127.0.0.1:9777"
 		listenFlag  bool
+		stdioMode   bool
 		ignored     []string
 		preload     []string
 		concurrency int
@@ -64,6 +65,8 @@ func runServe(args []string) error {
 			}
 			preload = append(preload, args[i+1])
 			i++
+		case "--stdio":
+			stdioMode = true
 		case "--concurrency", "-j":
 			if i+1 < len(args) {
 				if n, err := strconv.Atoi(args[i+1]); err == nil {
@@ -86,6 +89,10 @@ func runServe(args []string) error {
 		}
 	}
 
+	if stdioMode && listenFlag {
+		return fmt.Errorf("golit serve: --stdio and --listen are mutually exclusive")
+	}
+
 	if defsDir == "" {
 		defsDir = os.Getenv("GOLIT_DEFS")
 	}
@@ -98,7 +105,11 @@ func runServe(args []string) error {
 		}
 	}
 	if concurrency == 0 {
-		concurrency = runtime.NumCPU()
+		if stdioMode {
+			concurrency = 1
+		} else {
+			concurrency = runtime.NumCPU()
+		}
 	}
 
 	registry := jsengine.NewRegistry()
@@ -129,6 +140,10 @@ func runServe(args []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "golit serve: initialized %d engine workers\n", concurrency)
+
+	if stdioMode {
+		return runStdio(os.Stdin, os.Stdout, pool, registry, ignoredMap)
+	}
 
 	const maxBody = 32 << 20 // 32 MiB
 
