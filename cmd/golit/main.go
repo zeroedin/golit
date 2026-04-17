@@ -74,7 +74,7 @@ Usage:
   golit render --defs <bundles-dir> '<html-fragment>'
   echo '<html>' | golit render --defs <bundles-dir>
   golit render --component-js '<source>' '<html-fragment>'
-  golit serve --defs <bundles-dir> [--listen host:port]
+  golit serve --defs <bundles-dir> [--listen host:port] [--stdio]
   golit version
 
 Commands:
@@ -85,7 +85,9 @@ Commands:
   transform   Post-process HTML files, expanding custom elements into
               Declarative Shadow DOM using bundled components.
   render      Render a single HTML fragment to stdout.
-  serve       Run HTTP server: POST /render (full HTML) -> transformed HTML; GET /health.
+  serve       Run HTTP or stdio server for warm-pool rendering.
+              HTTP (default): POST /render (full HTML) -> transformed HTML; GET /health.
+              Stdio (--stdio): NUL-delimited stdin/stdout protocol.
   version     Print version information.
 
 Options:
@@ -102,6 +104,7 @@ Options:
   --concurrency, -j  Parallel workers for transform (default: sequential)
                      -j alone uses all CPUs, -j N uses N workers
   --component-js     Inline JS/TS component source for render command (repeatable)
+  --stdio            Use NUL-delimited stdin/stdout instead of HTTP (serve command)
 
 Component Discovery (transform command):
   golit discovers which components to SSR using four modes (combinable):
@@ -133,5 +136,8 @@ Examples:
 
   # Long-lived SSR (warm Renderer) for middleware integration
   golit serve --defs bundles/ --listen 127.0.0.1:9777
+
+  # Stdio mode (NUL-delimited, warm pool, no HTTP)
+  golit serve --defs bundles/ --stdio
 `)
 }
