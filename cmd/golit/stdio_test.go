@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"io"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,77 +11,6 @@ import (
 	"github.com/zeroedin/golit/pkg/jsengine"
 	"github.com/zeroedin/golit/pkg/transformer"
 )
-
-func projectRoot(t *testing.T) string {
-	t.Helper()
-	dir, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
-}
-
-func buildGolit(t *testing.T) string {
-	t.Helper()
-	name := "golit"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	bin := filepath.Join(t.TempDir(), name)
-	cmd := exec.Command("go", "build", "-o", bin, ".")
-	cmd.Dir = filepath.Join(projectRoot(t), "cmd", "golit")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("building golit: %v\n%s", err, out)
-	}
-	return bin
-}
-
-func buildTestBundles(t *testing.T) string {
-	t.Helper()
-	root := projectRoot(t)
-	bundleDir := t.TempDir()
-
-	sources := []string{
-		filepath.Join(root, "testdata", "sources", "my-greeting.js"),
-	}
-
-	nodeModulesDir := jsengine.FindNodeModules(sources[0])
-	externals, err := jsengine.DiscoverExternalPackages(sources, nodeModulesDir)
-	if err != nil {
-		t.Fatalf("discovering externals: %v", err)
-	}
-
-	modules, err := jsengine.BundleComponentModules(sources, jsengine.BundleOptions{
-		ExternalPackages: externals,
-	})
-	if err != nil {
-		t.Fatalf("bundling modules: %v", err)
-	}
-
-	if nodeModulesDir != "" {
-		rt, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules)
-		if err != nil {
-			t.Fatalf("building shared runtime: %v", err)
-		}
-		if err := jsengine.SaveBundle(rt, filepath.Join(bundleDir, "_runtime.golit.module.js")); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	modules = jsengine.RewriteModuleImports(modules, externals)
-
-	for srcPath, mod := range modules {
-		base := filepath.Base(srcPath)
-		ext := filepath.Ext(base)
-		outName := strings.TrimSuffix(base, ext) + ".golit.module.js"
-		if err := jsengine.SaveBundle(mod, filepath.Join(bundleDir, outName)); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return bundleDir
-}
 
 func buildTestPool(t *testing.T) (*jsengine.EnginePool, *jsengine.Registry) {
 	t.Helper()
