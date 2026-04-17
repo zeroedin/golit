@@ -43,19 +43,23 @@ func runStdio(stdin io.Reader, stdout io.Writer, pool *jsengine.EnginePool, regi
 		case result := <-ch:
 			if result.err != nil {
 				if result.err == io.EOF {
-					if result.data != "" {
-						input := strings.TrimSpace(result.data)
-						if input != "" {
-							engine := pool.Get()
-							out, _ := transformer.RenderHTMLWithEngine(input, engine, registry, ignored)
-							pool.Put(engine)
+					input := strings.TrimSuffix(result.data, "\x00")
+					if input != "" {
+						engine := pool.Get()
+						out, renderErr := transformer.RenderHTMLWithEngine(input, engine, registry, ignored)
+						pool.Put(engine)
+						if renderErr != nil {
+							fmt.Fprintf(os.Stderr, "golit serve: render error: %v\n", renderErr)
+						} else {
 							if _, err := writer.WriteString(out); err != nil {
 								return fmt.Errorf("writing stdout: %w", err)
 							}
-							if err := writer.WriteByte('\x00'); err != nil {
-								return fmt.Errorf("writing stdout: %w", err)
-							}
-							_ = writer.Flush()
+						}
+						if err := writer.WriteByte('\x00'); err != nil {
+							return fmt.Errorf("writing stdout: %w", err)
+						}
+						if err := writer.Flush(); err != nil {
+							return fmt.Errorf("flushing stdout: %w", err)
 						}
 					}
 					fmt.Fprintf(os.Stderr, "golit serve: stdin closed, shutting down\n")

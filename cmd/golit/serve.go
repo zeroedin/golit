@@ -80,7 +80,6 @@ func runServe(args []string) error {
 			if concurrency == 0 {
 				concurrency = runtime.NumCPU()
 			}
-			i++
 		default:
 			if strings.HasPrefix(args[i], "-") {
 				return fmt.Errorf("unknown flag: %s", args[i])

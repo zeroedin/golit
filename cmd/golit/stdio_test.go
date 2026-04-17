@@ -272,10 +272,7 @@ func TestE2E_ServeStdio(t *testing.T) {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting golit serve --stdio: %v", err)
 	}
-	defer func() {
-		stdinPipe.Close()
-		cmd.Wait()
-	}()
+	defer stdinPipe.Close()
 
 	_, err = stdinPipe.Write([]byte("<my-greeting name=\"E2E\"></my-greeting>\x00"))
 	if err != nil {
