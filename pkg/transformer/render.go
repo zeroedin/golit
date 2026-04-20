@@ -306,11 +306,15 @@ func lastIndexFold(s, substr string) int {
 }
 
 func extractBodyContent(rendered string) string {
-	bodyStart := indexFold(rendered, "<body>")
-	if bodyStart == -1 {
+	bodyTagStart := indexFold(rendered, "<body")
+	if bodyTagStart == -1 {
 		return rendered
 	}
-	bodyStart += len("<body>")
+	closeAngle := strings.IndexByte(rendered[bodyTagStart:], '>')
+	if closeAngle == -1 {
+		return rendered
+	}
+	bodyStart := bodyTagStart + closeAngle + 1
 	bodyEnd := lastIndexFold(rendered, "</body>")
 	if bodyEnd == -1 || bodyEnd < bodyStart {
 		return rendered

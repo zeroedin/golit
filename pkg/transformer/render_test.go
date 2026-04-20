@@ -332,6 +332,8 @@ func TestExtractBodyContent(t *testing.T) {
 		{`no body tags here`, `no body tags here`},
 		{`<html><BODY><p>upper</p></BODY></html>`, `<p>upper</p>`},
 		{`<html><Body><p>mixed</p></Body></html>`, `<p>mixed</p>`},
+		{`<html><body class="x"><p>attrs</p></body></html>`, `<p>attrs</p>`},
+		{`<html><head></head><body id="main" data-theme="dark"><div>content</div></body></html>`, `<div>content</div>`},
 	}
 	for _, tc := range cases {
 		if got := extractBodyContent(tc.input); got != tc.want {
