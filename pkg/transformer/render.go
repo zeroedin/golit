@@ -62,15 +62,27 @@ func renderHTMLWithContext(input string, ctx *transformContext) (string, error) 
 
 	var buf bytes.Buffer
 	buf.Grow(len(input) + len(input)/2)
-	if err := html.Render(&buf, doc); err != nil {
-		return "", fmt.Errorf("rendering HTML: %w", err)
+
+	if isFullDocument(input) {
+		if err := html.Render(&buf, doc); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+		return buf.String(), nil
 	}
 
-	result := buf.String()
-	if !isFullDocument(input) {
-		result = extractBodyContent(result)
+	body := findBodyNode(doc)
+	if body == nil {
+		if err := html.Render(&buf, doc); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+		return buf.String(), nil
 	}
-	return result, nil
+	for child := body.FirstChild; child != nil; child = child.NextSibling {
+		if err := html.Render(&buf, child); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+	}
+	return buf.String(), nil
 }
 
 // RenderFragment renders an HTML fragment.
@@ -303,6 +315,18 @@ func lastIndexFold(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+func findBodyNode(n *html.Node) *html.Node {
+	if n.Type == html.ElementNode && n.DataAtom == atom.Body {
+		return n
+	}
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		if found := findBodyNode(child); found != nil {
+			return found
+		}
+	}
+	return nil
 }
 
 func extractBodyContent(rendered string) string {

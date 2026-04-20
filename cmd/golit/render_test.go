@@ -169,8 +169,8 @@ func TestRender_NoInputError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no fragment and no stdin pipe")
 	}
-	if !strings.Contains(stderrBuf.String(), "missing HTML fragment") {
-		t.Errorf("expected 'missing HTML fragment' error, got: %s", stderrBuf.String())
+	if !strings.Contains(stderrBuf.String(), "missing HTML input") {
+		t.Errorf("expected 'missing HTML input' error, got: %s", stderrBuf.String())
 	}
 }
 

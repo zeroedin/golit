@@ -11,7 +11,7 @@ import (
 )
 
 func runRender(args []string) error {
-	var defsDir, fragment string
+	var defsDir, inputHTML string
 	var componentSources []string
 
 	i := 0
@@ -33,10 +33,10 @@ func runRender(args []string) error {
 			if strings.HasPrefix(args[i], "--") {
 				return fmt.Errorf("unknown option: %s", args[i])
 			}
-			if fragment == "" {
-				fragment = args[i]
+			if inputHTML == "" {
+				inputHTML = args[i]
 			} else {
-				fragment += " " + args[i]
+				inputHTML += " " + args[i]
 			}
 			i++
 		}
@@ -45,7 +45,7 @@ func runRender(args []string) error {
 	if defsDir == "" && len(componentSources) == 0 {
 		return fmt.Errorf("missing required --defs <dir> or --component-js <source> argument")
 	}
-	if fragment == "" {
+	if inputHTML == "" {
 		info, err := os.Stdin.Stat()
 		if err != nil {
 			return fmt.Errorf("checking stdin: %w", err)
@@ -59,11 +59,11 @@ func runRender(args []string) error {
 			if len(data) > maxStdin {
 				return fmt.Errorf("stdin input too large (max %d MiB)", maxStdin>>20)
 			}
-			fragment = strings.TrimSpace(string(data))
+			inputHTML = strings.TrimSpace(string(data))
 		}
 	}
-	if fragment == "" {
-		return fmt.Errorf("missing HTML fragment argument (pass as argument or pipe to stdin)")
+	if inputHTML == "" {
+		return fmt.Errorf("missing HTML input (pass as argument or pipe to stdin)")
 	}
 
 	registry := jsengine.NewRegistry()
@@ -86,7 +86,7 @@ func runRender(args []string) error {
 		fmt.Fprintf(os.Stderr, "golit: registered <%s> from inline source\n", tagName)
 	}
 
-	output, err := transformer.RenderHTML(fragment, registry)
+	output, err := transformer.RenderHTML(inputHTML, registry)
 	if err != nil {
 		return fmt.Errorf("rendering: %w", err)
 	}

@@ -302,6 +302,30 @@ func TestRenderHTML_FragmentMode(t *testing.T) {
 	}
 }
 
+func TestRenderHTML_FragmentBodyExtraction(t *testing.T) {
+	engine := newMockEngine()
+	engine.addComponent("my-el", "<p>ok</p>", "")
+
+	registry := jsengine.NewRegistry()
+	registry.Register("my-el", "fake-bundle")
+
+	input := `<div><my-el></my-el></div>`
+	output, err := RenderHTMLWithEngine(input, engine, registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(output, "<html>") {
+		t.Error("fragment input should not produce full document wrapper")
+	}
+	if strings.Contains(output, "<head>") {
+		t.Error("fragment output should not contain <head>")
+	}
+	if !strings.Contains(output, "shadowrootmode") {
+		t.Error("element should be expanded")
+	}
+}
+
 func TestIsFullDocument(t *testing.T) {
 	cases := []struct {
 		input string
