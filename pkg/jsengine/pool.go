@@ -38,6 +38,8 @@ func NewEnginePool(size int) (*EnginePool, error) {
 // loads any raw preload bundles, bundles dynamic import targets as preloads,
 // loads the shared runtime (if present), then loads all registry component
 // bundles/modules.
+// A dedicated compiler engine compiles modules to bytecode and stores them
+// in the registry; subsequent engines load from bytecode for faster initialization.
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
@@ -49,20 +51,42 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 
 	for i := 0; i < p.size; i++ {
 		e := <-p.engines
+		useBytecode := i > 0 && registry.HasBytecode()
+
 		e.SetPreloadModules(preloadModules)
 		e.SetRuntimeExternals(runtimeExternals)
 		for _, pb := range preloadBundles {
 			_ = e.LoadBundle(pb)
 		}
 		if sharedRuntime != "" && !e.loaded["@golit/runtime"] {
-			if err := e.LoadModule("@golit/runtime", sharedRuntime); err != nil {
-				fmt.Fprintf(os.Stderr, "golit: warning: loading shared runtime: %v\n", err)
-			} else {
-				e.loaded["@golit/runtime"] = true
+			if useBytecode {
+				if bc := registry.LookupBytecode("@golit/runtime"); bc != nil {
+					if err := e.LoadModuleBytecode("@golit/runtime", bc); err == nil {
+						e.loaded["@golit/runtime"] = true
+					} else {
+						fmt.Fprintf(os.Stderr, "golit: bytecode load failed for runtime, falling back to source: %v\n", err)
+						useBytecode = false
+					}
+				}
+			}
+			if !e.loaded["@golit/runtime"] {
+				if err := e.LoadModule("@golit/runtime", sharedRuntime); err != nil {
+					fmt.Fprintf(os.Stderr, "golit: warning: loading shared runtime: %v\n", err)
+				} else {
+					e.loaded["@golit/runtime"] = true
+				}
 			}
 		}
 		for specifier, source := range dynamicModules {
 			if !e.loaded[specifier] {
+				if useBytecode {
+					if bc := registry.LookupBytecode(specifier); bc != nil {
+						if err := e.LoadModuleBytecode(specifier, bc); err == nil {
+							e.loaded[specifier] = true
+							continue
+						}
+					}
+				}
 				if err := e.LoadModule(specifier, source); err != nil {
 					fmt.Fprintf(os.Stderr, "golit: warning: loading dynamic module %s: %v\n", specifier, err)
 				} else {
@@ -71,10 +95,27 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 			}
 		}
 		for _, tag := range tags {
+			if e.loaded[tag] {
+				continue
+			}
+			if useBytecode {
+				if bc := registry.LookupBytecode(tag + ".js"); bc != nil {
+					if err := e.EvalModuleBytecode(tag+".js", bc); err == nil {
+						e.loaded[tag] = true
+						continue
+					}
+				}
+			}
 			if _, err := e.LoadBundleForTag(tag, registry); err != nil {
 				fmt.Fprintf(os.Stderr, "golit: warning: %v\n", err)
 			}
 		}
+
+		// First iteration: use a dedicated compiler engine to build bytecode for subsequent engines
+		if i == 0 && p.size > 1 && !registry.HasBytecode() {
+			p.compileBytecodeCache(e, registry, sharedRuntime, dynamicModules, tags)
+		}
+
 		drained = append(drained, e)
 	}
 
@@ -82,6 +123,51 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 		p.engines <- e
 	}
 	return nil
+}
+
+// compileBytecodeCache uses a dedicated engine to compile all modules
+// to bytecode and store them in the registry for reuse.
+func (p *EnginePool) compileBytecodeCache(e *Engine, registry *Registry, sharedRuntime string, dynamicModules map[string]string, tags []string) {
+	compiler, err := NewEngine()
+	if err != nil {
+		return
+	}
+	defer compiler.Close()
+
+	compiler.SetPreloadModules(e.preloadModules)
+	compiler.SetRuntimeExternals(e.runtimeExternals)
+
+	if sharedRuntime != "" {
+		if bc, err := compiler.CompileModule("@golit/runtime", sharedRuntime); err == nil {
+			registry.SetBytecode("@golit/runtime", bc)
+		}
+		if err := compiler.LoadModule("@golit/runtime", sharedRuntime); err == nil {
+			compiler.loaded["@golit/runtime"] = true
+		} else {
+			fmt.Fprintf(os.Stderr, "golit: bytecode compiler: failed to load runtime: %v\n", err)
+		}
+	}
+
+	for specifier, source := range dynamicModules {
+		if bc, err := compiler.CompileModule(specifier, source); err == nil {
+			registry.SetBytecode(specifier, bc)
+		}
+		if err := compiler.LoadModule(specifier, source); err == nil {
+			compiler.loaded[specifier] = true
+		} else {
+			fmt.Fprintf(os.Stderr, "golit: bytecode compiler: failed to load %s: %v\n", specifier, err)
+		}
+	}
+
+	for _, tag := range tags {
+		source := registry.Lookup(tag)
+		if source == "" {
+			continue
+		}
+		if bc, err := compiler.CompileModule(tag+".js", source); err == nil {
+			registry.SetBytecode(tag+".js", bc)
+		}
+	}
 }
 
 // Get checks out an engine from the pool. Blocks if none are available.
