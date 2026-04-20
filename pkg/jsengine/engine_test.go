@@ -410,3 +410,143 @@ func TestBundleStandaloneModule_DefaultExport(t *testing.T) {
 		t.Errorf("expected cssText to contain 'color: red', got: %q", output.CSSText)
 	}
 }
+
+func TestEngine_RenderBatch_CacheHit(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
+
+	attrs := map[string]string{"name": "Cache"}
+	requests := []BatchRequest{
+		{ID: 1, TagName: "my-greeting", Attrs: attrs},
+		{ID: 2, TagName: "my-greeting", Attrs: attrs},
+		{ID: 3, TagName: "my-greeting", Attrs: attrs},
+	}
+
+	results, err := engine.RenderBatch(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+
+	for i, r := range results {
+		if r.Error != "" {
+			t.Errorf("result[%d] error: %s", i, r.Error)
+		}
+		if !strings.Contains(r.HTML, "Cache") {
+			t.Errorf("result[%d] missing 'Cache' in HTML", i)
+		}
+	}
+
+	if results[0].HTML != results[1].HTML || results[1].HTML != results[2].HTML {
+		t.Error("identical requests should produce identical HTML via cache")
+	}
+}
+
+func TestEngine_RenderBatch_CacheMiss_DifferentAttrs(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := []BatchRequest{
+		{ID: 1, TagName: "my-greeting", Attrs: map[string]string{"name": "Alice"}},
+		{ID: 2, TagName: "my-greeting", Attrs: map[string]string{"name": "Bob"}},
+	}
+
+	results, err := engine.RenderBatch(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if results[0].HTML == results[1].HTML {
+		t.Error("different attrs should produce different HTML")
+	}
+	if !strings.Contains(results[0].HTML, "Alice") {
+		t.Error("result[0] missing 'Alice'")
+	}
+	if !strings.Contains(results[1].HTML, "Bob") {
+		t.Error("result[1] missing 'Bob'")
+	}
+}
+
+func TestEngine_RenderBatch_ErrorPropagation(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+	if err := engine.LoadBundle(bundle); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := []BatchRequest{
+		{ID: 1, TagName: "my-greeting", Attrs: map[string]string{"name": "OK"}},
+		{ID: 2, TagName: "nonexistent-element", Attrs: map[string]string{}},
+	}
+
+	results, err := engine.RenderBatch(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].Error != "" {
+		t.Errorf("result[0] unexpected error: %s", results[0].Error)
+	}
+	if !strings.Contains(results[0].HTML, "OK") {
+		t.Error("result[0] missing 'OK' in HTML")
+	}
+	if results[1].Error == "" {
+		t.Error("expected error for unregistered element in batch")
+	}
+}
+
+func TestEngine_RenderBatch_Empty(t *testing.T) {
+	engine, err := NewEngine()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer engine.Close()
+
+	results, err := engine.RenderBatch(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if results != nil {
+		t.Errorf("expected nil results for empty batch, got %v", results)
+	}
+}
+
+func TestRenderCacheKey(t *testing.T) {
+	k1 := renderCacheKey("my-el", map[string]string{"a": "1", "b": "2"})
+	k2 := renderCacheKey("my-el", map[string]string{"b": "2", "a": "1"})
+	if k1 != k2 {
+		t.Error("cache key should be deterministic regardless of map iteration order")
+	}
+
+	k3 := renderCacheKey("my-el", map[string]string{})
+	k4 := renderCacheKey("my-el", nil)
+	if k3 != "my-el" || k4 != "my-el" {
+		t.Error("empty attrs should produce tag-name-only key")
+	}
+}

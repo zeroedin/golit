@@ -41,11 +41,10 @@ type renderCacheEntry struct {
 type Engine struct {
 	runtime          *qjs.Runtime
 	ctx              *qjs.Context
-	loaded           map[string]bool           // track which bundles have been loaded
-	preloadModules   []string                  // module names available via __preloadedModules
-	runtimeExternals []string                  // package prefixes bundled into @golit/runtime
-	renderCache      map[string]renderCacheEntry // cache by "tagName\x00{sorted attrs json}"
-	cssCache         map[string]string           // CSS by tag name (avoids sending CSS from JS)
+	loaded           map[string]bool             // track which bundles have been loaded
+	preloadModules   []string                    // module names available via __preloadedModules
+	runtimeExternals []string                    // package prefixes bundled into @golit/runtime
+	renderCache      map[string]renderCacheEntry // cache by "tagName\x00key=val\x00key=val"
 	renderFnReady    bool                        // whether __golitRenderBatch is registered
 }
 
@@ -60,7 +59,6 @@ func NewEngine() (*Engine, error) {
 		ctx:         rt.Context(),
 		loaded:      make(map[string]bool),
 		renderCache: make(map[string]renderCacheEntry),
-		cssCache:    make(map[string]string),
 	}
 	if err := e.initHelpers(); err != nil {
 		rt.Close()
@@ -103,7 +101,6 @@ func (e *Engine) Reset() error {
 	e.ctx = rt.Context()
 	e.loaded = make(map[string]bool)
 	e.renderCache = make(map[string]renderCacheEntry)
-	e.cssCache = make(map[string]string)
 	e.renderFnReady = false
 	if err := e.initHelpers(); err != nil {
 		return fmt.Errorf("re-initializing helpers: %w", err)
@@ -490,7 +487,7 @@ func (e *Engine) registerRenderFn() error {
 		`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
 		`globalThis.__cssCache.set(Ctor,css);}` +
 		`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
-		`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
+		`}catch(e){results.push({id:req.id,error:String(e&&e.message||e),tagName:req.tagName});}}` +
 		`return JSON.stringify(results);};`
 	_, err := e.ctx.Eval("golit-render-fn.js", qjs.Code(renderFnJS))
 	if err != nil {
@@ -579,6 +576,11 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		req := uncached[j]
 		r, ok := jsResultMap[req.ID]
 		if !ok {
+			results[origIdx] = BatchResult{
+				ID:      req.ID,
+				TagName: req.TagName,
+				Error:   fmt.Sprintf("no result returned from JS for <%s>", req.TagName),
+			}
 			continue
 		}
 		results[origIdx] = r
@@ -586,9 +588,6 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		if r.Error == "" {
 			key := renderCacheKey(req.TagName, req.Attrs)
 			e.renderCache[key] = renderCacheEntry{html: r.HTML, css: r.CSS}
-			if _, hasCss := e.cssCache[req.TagName]; !hasCss && r.CSS != "" {
-				e.cssCache[req.TagName] = r.CSS
-			}
 		}
 	}
 

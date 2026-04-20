@@ -23,7 +23,7 @@ const ELEMENT_PART = 6;
 // Digest computation (DJB2, matching Lit's digestForTemplateResult)
 // ============================================================
 
-const __digestCache = new Map();
+const __digestCache = new WeakMap();
 
 function computeDigest(strings) {
   const cached = __digestCache.get(strings);
@@ -100,7 +100,7 @@ const rawTextElement = /^(?:script|style|textarea|title)$/i;
  *   strings:  interleaved strings for the attribute (for multi-expr attrs)
  *   tagName:  tag name of the element this binding is on
  */
-const __bindingsCache = new Map();
+const __bindingsCache = new WeakMap();
 
 function classifyBindings(strings) {
   const cached = __bindingsCache.get(strings);

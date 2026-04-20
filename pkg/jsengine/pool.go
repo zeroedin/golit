@@ -38,8 +38,8 @@ func NewEnginePool(size int) (*EnginePool, error) {
 // loads any raw preload bundles, bundles dynamic import targets as preloads,
 // loads the shared runtime (if present), then loads all registry component
 // bundles/modules.
-// The first engine compiles modules to bytecode and stores them in the
-// registry; subsequent engines load from bytecode for faster initialization.
+// A dedicated compiler engine compiles modules to bytecode and stores them
+// in the registry; subsequent engines load from bytecode for faster initialization.
 // After this call the registry must be treated as read-only.
 func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, preloadBundles ...string) error {
 	tags := registry.TagNames()
@@ -111,7 +111,7 @@ func (p *EnginePool) PreloadAll(registry *Registry, preloadModules []string, pre
 			}
 		}
 
-		// First engine: compile bytecode for subsequent engines (skip for single-engine pools)
+		// First iteration: use a dedicated compiler engine to build bytecode for subsequent engines
 		if i == 0 && p.size > 1 && !registry.HasBytecode() {
 			p.compileBytecodeCache(e, registry, sharedRuntime, dynamicModules, tags)
 		}
