@@ -273,6 +273,15 @@ func hasDeclarativeShadowRoot(node *html.Node) bool {
 
 func isFullDocument(input string) bool {
 	s := strings.TrimLeft(input, " \t\n\r\f")
+	s = strings.TrimPrefix(s, "\xEF\xBB\xBF")
+	s = strings.TrimLeft(s, " \t\n\r\f")
+	for strings.HasPrefix(s, "<!--") {
+		end := strings.Index(s, "-->")
+		if end == -1 {
+			break
+		}
+		s = strings.TrimLeft(s[end+3:], " \t\n\r\f")
+	}
 	if len(s) < 5 {
 		return false
 	}

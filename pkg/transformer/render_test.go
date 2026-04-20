@@ -338,6 +338,11 @@ func TestIsFullDocument(t *testing.T) {
 		{`<div>hello</div>`, false},
 		{`<my-element></my-element>`, false},
 		{``, false},
+		{"\xEF\xBB\xBF<!DOCTYPE html><html>", true},
+		{"\xEF\xBB\xBF  <html>", true},
+		{"<!-- generated -->\n<!DOCTYPE html><html>", true},
+		{"<!-- a --><!-- b -->\n<html>", true},
+		{"\xEF\xBB\xBF<!-- comment -->\n<!doctype html>", true},
 	}
 	for _, tc := range cases {
 		if got := isFullDocument(tc.input); got != tc.want {
