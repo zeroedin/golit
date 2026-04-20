@@ -141,16 +141,22 @@ func (p *EnginePool) compileBytecodeCache(e *Engine, registry *Registry, sharedR
 		if bc, err := compiler.CompileModule("@golit/runtime", sharedRuntime); err == nil {
 			registry.SetBytecode("@golit/runtime", bc)
 		}
-		_ = compiler.LoadModule("@golit/runtime", sharedRuntime)
-		compiler.loaded["@golit/runtime"] = true
+		if err := compiler.LoadModule("@golit/runtime", sharedRuntime); err == nil {
+			compiler.loaded["@golit/runtime"] = true
+		} else {
+			fmt.Fprintf(os.Stderr, "golit: bytecode compiler: failed to load runtime: %v\n", err)
+		}
 	}
 
 	for specifier, source := range dynamicModules {
 		if bc, err := compiler.CompileModule(specifier, source); err == nil {
 			registry.SetBytecode(specifier, bc)
 		}
-		_ = compiler.LoadModule(specifier, source)
-		compiler.loaded[specifier] = true
+		if err := compiler.LoadModule(specifier, source); err == nil {
+			compiler.loaded[specifier] = true
+		} else {
+			fmt.Fprintf(os.Stderr, "golit: bytecode compiler: failed to load %s: %v\n", specifier, err)
+		}
 	}
 
 	for _, tag := range tags {

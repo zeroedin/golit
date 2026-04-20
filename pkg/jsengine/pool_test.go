@@ -101,6 +101,45 @@ func TestEnginePool_Available(t *testing.T) {
 	}
 }
 
+func TestEnginePool_BytecodePrecompilation(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	registry := NewRegistry()
+	tagName, err := DiscoverTagName(bundle)
+	if err != nil {
+		t.Fatalf("DiscoverTagName: %v", err)
+	}
+	registry.Register(tagName, bundle)
+
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if registry.HasBytecode() {
+		t.Fatal("registry should not have bytecode before PreloadAll")
+	}
+
+	if err := pool.PreloadAll(registry, nil); err != nil {
+		t.Fatalf("PreloadAll: %v", err)
+	}
+
+	if !registry.HasBytecode() {
+		t.Fatal("registry should have bytecode after PreloadAll with pool size > 1")
+	}
+
+	e := pool.Get()
+	result, err := e.RenderElement("my-greeting", map[string]string{"name": "Bytecode"})
+	pool.Put(e)
+	if err != nil {
+		t.Fatalf("render with bytecode-loaded engine: %v", err)
+	}
+	if !strings.Contains(result.HTML, "Bytecode") {
+		t.Errorf("missing 'Bytecode' in output: %s", result.HTML)
+	}
+}
+
 func TestEnginePool_ConcurrentRender(t *testing.T) {
 	bundle := bundleMyGreeting(t)
 

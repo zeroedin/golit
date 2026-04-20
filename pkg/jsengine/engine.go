@@ -509,6 +509,7 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 	results := make([]BatchResult, len(requests))
 	var uncached []BatchRequest
 	uncachedIdx := make([]int, 0, len(requests))
+	var uncachedKeys []string
 
 	for i, req := range requests {
 		key := renderCacheKey(req.TagName, req.Attrs)
@@ -522,6 +523,7 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		} else {
 			uncached = append(uncached, req)
 			uncachedIdx = append(uncachedIdx, i)
+			uncachedKeys = append(uncachedKeys, key)
 		}
 	}
 
@@ -586,8 +588,7 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		results[origIdx] = r
 
 		if r.Error == "" {
-			key := renderCacheKey(req.TagName, req.Attrs)
-			e.renderCache[key] = renderCacheEntry{html: r.HTML, css: r.CSS}
+			e.renderCache[uncachedKeys[j]] = renderCacheEntry{html: r.HTML, css: r.CSS}
 		}
 	}
 
