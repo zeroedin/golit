@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/fastschema/qjs"
@@ -29,13 +30,23 @@ type RenderResult struct {
 	TagName string
 }
 
+// renderCacheEntry stores the cached result of rendering a component
+// with a specific set of attributes.
+type renderCacheEntry struct {
+	html string
+	css  string
+}
+
 // Engine executes Lit components in QJS for SSR rendering.
 type Engine struct {
 	runtime          *qjs.Runtime
 	ctx              *qjs.Context
-	loaded           map[string]bool // track which bundles have been loaded
-	preloadModules   []string        // module names available via __preloadedModules
-	runtimeExternals []string        // package prefixes bundled into @golit/runtime
+	loaded           map[string]bool           // track which bundles have been loaded
+	preloadModules   []string                  // module names available via __preloadedModules
+	runtimeExternals []string                  // package prefixes bundled into @golit/runtime
+	renderCache      map[string]renderCacheEntry // cache by "tagName\x00{sorted attrs json}"
+	cssCache         map[string]string           // CSS by tag name (avoids sending CSS from JS)
+	renderFnReady    bool                        // whether __golitRenderBatch is registered
 }
 
 // NewEngine creates a new QJS engine instance.
@@ -45,9 +56,11 @@ func NewEngine() (*Engine, error) {
 		return nil, fmt.Errorf("creating QJS runtime: %w", err)
 	}
 	e := &Engine{
-		runtime: rt,
-		ctx:     rt.Context(),
-		loaded:  make(map[string]bool),
+		runtime:     rt,
+		ctx:         rt.Context(),
+		loaded:      make(map[string]bool),
+		renderCache: make(map[string]renderCacheEntry),
+		cssCache:    make(map[string]string),
 	}
 	if err := e.initHelpers(); err != nil {
 		rt.Close()
@@ -89,6 +102,9 @@ func (e *Engine) Reset() error {
 	e.runtime = rt
 	e.ctx = rt.Context()
 	e.loaded = make(map[string]bool)
+	e.renderCache = make(map[string]renderCacheEntry)
+	e.cssCache = make(map[string]string)
+	e.renderFnReady = false
 	if err := e.initHelpers(); err != nil {
 		return fmt.Errorf("re-initializing helpers: %w", err)
 	}
@@ -140,6 +156,35 @@ func (e *Engine) EvalModule(name string, source string) error {
 	_, err := e.ctx.Eval(name, qjs.Code(code), qjs.TypeModule())
 	if err != nil {
 		return fmt.Errorf("evaluating module %s: %w", name, err)
+	}
+	return nil
+}
+
+// CompileModule compiles an ES module to bytecode without executing it.
+func (e *Engine) CompileModule(name string, source string) ([]byte, error) {
+	code := e.shimDynamicImports(source)
+	bc, err := e.ctx.Compile(name, qjs.Code(code), qjs.TypeModule(), qjs.FlagCompileOnly())
+	if err != nil {
+		return nil, fmt.Errorf("compiling module %s: %w", name, err)
+	}
+	return bc, nil
+}
+
+// EvalModuleBytecode loads and executes a pre-compiled ES module from bytecode.
+func (e *Engine) EvalModuleBytecode(name string, bc []byte) error {
+	_, err := e.ctx.Eval(name, qjs.Bytecode(bc))
+	if err != nil {
+		return fmt.Errorf("evaluating bytecode module %s: %w", name, err)
+	}
+	return nil
+}
+
+// LoadModuleBytecode loads a pre-compiled module into the module cache
+// from bytecode without executing it.
+func (e *Engine) LoadModuleBytecode(name string, bc []byte) error {
+	_, err := e.runtime.Load(name, qjs.Bytecode(bc))
+	if err != nil {
+		return fmt.Errorf("loading bytecode module %s: %w", name, err)
 	}
 	return nil
 }
@@ -401,52 +446,150 @@ type BatchResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// RenderBatch renders multiple custom elements in a single QJS Eval call,
-// reducing Go-to-JS boundary crossings. Each element is still rendered
-// individually within QJS; the batching is at the transport layer only.
-const batchRenderSuffix = `;const results=[];` +
-	`for(const req of requests){` +
-	`const Ctor=customElements.get(req.tagName);` +
-	`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered',tagName:req.tagName});continue;}` +
-	`try{` +
-	`const el=new Ctor();` +
-	`for(const [key,value] of Object.entries(req.attrs||{})){` +
-	`el.setAttribute(key,value);` +
-	`const propName=attributeToProperty(Ctor,key);` +
-	`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
-	`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render(),true);}else{html=__collectTemplateResult(null,true);}` +
-	`let css='';if(globalThis.__cssCache.has(Ctor)){css=globalThis.__cssCache.get(Ctor);}` +
-	`else{if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
-	`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
-	`globalThis.__cssCache.set(Ctor,css);}` +
-	`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
-	`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
-	`return JSON.stringify(results);})();`
+// renderCacheKey builds a deterministic cache key from tag name and attributes.
+func renderCacheKey(tagName string, attrs map[string]string) string {
+	if len(attrs) == 0 {
+		return tagName
+	}
+	keys := make([]string, 0, len(attrs))
+	for k := range attrs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString(tagName)
+	for _, k := range keys {
+		b.WriteByte(0)
+		b.WriteString(k)
+		b.WriteByte('=')
+		b.WriteString(attrs[k])
+	}
+	return b.String()
+}
 
+// registerRenderFn registers the batch render function in JS once,
+// so subsequent calls avoid re-parsing the render loop code.
+func (e *Engine) registerRenderFn() error {
+	if e.renderFnReady {
+		return nil
+	}
+	const renderFnJS = `globalThis.__golitRenderBatch=function(requestsJSON){` +
+		`const requests=JSON.parse(requestsJSON);const results=[];` +
+		`for(const req of requests){` +
+		`const Ctor=customElements.get(req.tagName);` +
+		`if(!Ctor){results.push({id:req.id,error:'Element <'+req.tagName+'> not registered',tagName:req.tagName});continue;}` +
+		`try{` +
+		`const el=new Ctor();` +
+		`for(const [key,value] of Object.entries(req.attrs||{})){` +
+		`el.setAttribute(key,value);` +
+		`const propName=attributeToProperty(Ctor,key);` +
+		`if(propName){const propConfig=getPropertyConfig(Ctor,propName);el[propName]=coerceValue(value,propConfig);}}` +
+		`let html='';if(typeof el.render==='function'){html=__collectTemplateResult(el.render(),true);}else{html=__collectTemplateResult(null,true);}` +
+		`let css='';if(globalThis.__cssCache.has(Ctor)){css=globalThis.__cssCache.get(Ctor);}` +
+		`else{if(Ctor.styles){css=extractStyles(Ctor.styles);}` +
+		`else if(Ctor.elementStyles){css=extractStyles(Ctor.elementStyles);}` +
+		`globalThis.__cssCache.set(Ctor,css);}` +
+		`results.push({id:req.id,html:html,css:css,tagName:req.tagName});` +
+		`}catch(e){results.push({id:req.id,error:e.message,tagName:req.tagName});}}` +
+		`return JSON.stringify(results);};`
+	_, err := e.ctx.Eval("golit-render-fn.js", qjs.Code(renderFnJS))
+	if err != nil {
+		return fmt.Errorf("registering render function: %w", err)
+	}
+	e.renderFnReady = true
+	return nil
+}
+
+// RenderBatch renders multiple custom elements in a single QJS call.
+// Uses Go-side render result caching to skip JS execution for
+// previously-seen (tagName, attrs) combinations, and calls a
+// pre-registered JS function to avoid re-parsing the render loop.
 func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 	if len(requests) == 0 {
 		return nil, nil
 	}
 
-	reqJSON, err := json.Marshal(requests)
+	results := make([]BatchResult, len(requests))
+	var uncached []BatchRequest
+	uncachedIdx := make([]int, 0, len(requests))
+
+	for i, req := range requests {
+		key := renderCacheKey(req.TagName, req.Attrs)
+		if entry, ok := e.renderCache[key]; ok {
+			results[i] = BatchResult{
+				ID:      req.ID,
+				HTML:    entry.html,
+				CSS:     entry.css,
+				TagName: req.TagName,
+			}
+		} else {
+			uncached = append(uncached, req)
+			uncachedIdx = append(uncachedIdx, i)
+		}
+	}
+
+	if len(uncached) == 0 {
+		return results, nil
+	}
+
+	if err := e.registerRenderFn(); err != nil {
+		return nil, err
+	}
+
+	reqJSON, err := json.Marshal(uncached)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling batch requests: %w", err)
 	}
 
 	var script strings.Builder
-	script.Grow(len(reqJSON) + len(batchRenderSuffix) + 32)
-	script.WriteString("(function(){const requests=")
-	script.Write(reqJSON)
-	script.WriteString(batchRenderSuffix)
+	script.Grow(len(reqJSON) + 40)
+	script.WriteString("__golitRenderBatch('")
+	for _, b := range reqJSON {
+		switch b {
+		case '\'':
+			script.WriteString("\\'")
+		case '\\':
+			script.WriteString("\\\\")
+		case '\n':
+			script.WriteString("\\n")
+		case '\r':
+			script.WriteString("\\r")
+		default:
+			script.WriteByte(b)
+		}
+	}
+	script.WriteString("')")
 
 	result, err := e.ctx.Eval("render-batch.js", qjs.Code(script.String()))
 	if err != nil {
 		return nil, fmt.Errorf("batch render eval: %w", err)
 	}
 
-	var results []BatchResult
-	if err := json.Unmarshal([]byte(result.String()), &results); err != nil {
+	var jsResults []BatchResult
+	if err := json.Unmarshal([]byte(result.String()), &jsResults); err != nil {
 		return nil, fmt.Errorf("parsing batch results: %w (raw: %s)", err, result.String())
+	}
+
+	jsResultMap := make(map[int]BatchResult, len(jsResults))
+	for _, r := range jsResults {
+		jsResultMap[r.ID] = r
+	}
+
+	for j, origIdx := range uncachedIdx {
+		req := uncached[j]
+		r, ok := jsResultMap[req.ID]
+		if !ok {
+			continue
+		}
+		results[origIdx] = r
+
+		if r.Error == "" {
+			key := renderCacheKey(req.TagName, req.Attrs)
+			e.renderCache[key] = renderCacheEntry{html: r.HTML, css: r.CSS}
+			if _, hasCss := e.cssCache[req.TagName]; !hasCss && r.CSS != "" {
+				e.cssCache[req.TagName] = r.CSS
+			}
+		}
 	}
 
 	return results, nil

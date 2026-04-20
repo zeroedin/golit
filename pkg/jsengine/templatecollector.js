@@ -23,7 +23,12 @@ const ELEMENT_PART = 6;
 // Digest computation (DJB2, matching Lit's digestForTemplateResult)
 // ============================================================
 
+const __digestCache = new Map();
+
 function computeDigest(strings) {
+  const cached = __digestCache.get(strings);
+  if (cached !== undefined) return cached;
+
   const hashes = new Uint32Array(2).fill(5381);
   for (const s of strings) {
     for (let i = 0; i < s.length; i++) {
@@ -35,18 +40,23 @@ function computeDigest(strings) {
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  if (typeof btoa === 'function') return btoa(binary);
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let result = '';
-  for (let i = 0; i < binary.length; i += 3) {
-    const a = binary.charCodeAt(i);
-    const b = i + 1 < binary.length ? binary.charCodeAt(i + 1) : 0;
-    const c = i + 2 < binary.length ? binary.charCodeAt(i + 2) : 0;
-    result += chars[a >> 2];
-    result += chars[((a & 3) << 4) | (b >> 4)];
-    result += i + 1 < binary.length ? chars[((b & 15) << 2) | (c >> 6)] : '=';
-    result += i + 2 < binary.length ? chars[c & 63] : '=';
+  let result;
+  if (typeof btoa === 'function') {
+    result = btoa(binary);
+  } else {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    result = '';
+    for (let i = 0; i < binary.length; i += 3) {
+      const a = binary.charCodeAt(i);
+      const b = i + 1 < binary.length ? binary.charCodeAt(i + 1) : 0;
+      const c = i + 2 < binary.length ? binary.charCodeAt(i + 2) : 0;
+      result += chars[a >> 2];
+      result += chars[((a & 3) << 4) | (b >> 4)];
+      result += i + 1 < binary.length ? chars[((b & 15) << 2) | (c >> 6)] : '=';
+      result += i + 2 < binary.length ? chars[c & 63] : '=';
+    }
   }
+  __digestCache.set(strings, result);
   return result;
 }
 
@@ -90,7 +100,12 @@ const rawTextElement = /^(?:script|style|textarea|title)$/i;
  *   strings:  interleaved strings for the attribute (for multi-expr attrs)
  *   tagName:  tag name of the element this binding is on
  */
+const __bindingsCache = new Map();
+
 function classifyBindings(strings) {
+  const cached = __bindingsCache.get(strings);
+  if (cached !== undefined) return cached;
+
   const l = strings.length - 1;
   const bindings = [];
 
@@ -258,6 +273,7 @@ function classifyBindings(strings) {
     }
   }
 
+  __bindingsCache.set(strings, bindings);
   return bindings;
 }
 

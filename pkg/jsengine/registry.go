@@ -60,6 +60,11 @@ type Registry struct {
 	// processedPaths tracks source file paths that have already been processed,
 	// so discoverFromHTML can skip re-processing across multiple HTML files.
 	processedPaths map[string]bool
+
+	// bytecodeCache stores pre-compiled QJS bytecode keyed by module name.
+	// Populated by the first engine during PreloadAll; subsequent engines
+	// load from bytecode instead of re-parsing source.
+	bytecodeCache map[string][]byte
 }
 
 // NewRegistry creates an empty registry for component modules and optional
@@ -298,6 +303,33 @@ func (r *Registry) TagNames() []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// SetBytecode stores pre-compiled bytecode for a module name.
+func (r *Registry) SetBytecode(name string, bc []byte) {
+	r.mu.Lock()
+	if r.bytecodeCache == nil {
+		r.bytecodeCache = make(map[string][]byte)
+	}
+	r.bytecodeCache[name] = bc
+	r.mu.Unlock()
+}
+
+// LookupBytecode returns pre-compiled bytecode for a module name, or nil.
+func (r *Registry) LookupBytecode(name string) []byte {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.bytecodeCache == nil {
+		return nil
+	}
+	return r.bytecodeCache[name]
+}
+
+// HasBytecode returns true if any bytecode has been cached.
+func (r *Registry) HasBytecode() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.bytecodeCache) > 0
 }
 
 // MarkUnregistered records a custom element tag that was encountered
