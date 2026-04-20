@@ -169,8 +169,75 @@ func TestRender_NoInputError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no fragment and no stdin pipe")
 	}
-	if !strings.Contains(stderrBuf.String(), "missing HTML fragment") {
-		t.Errorf("expected 'missing HTML fragment' error, got: %s", stderrBuf.String())
+	if !strings.Contains(stderrBuf.String(), "missing HTML input") {
+		t.Errorf("expected 'missing HTML input' error, got: %s", stderrBuf.String())
+	}
+}
+
+func TestRender_FullDocumentPreserved(t *testing.T) {
+	bin := buildGolit(t)
+	bundleDir := buildTestBundles(t)
+
+	input := `<!DOCTYPE html><html><head><title>Test</title></head><body><my-greeting name="Doc"></my-greeting></body></html>`
+	cmd := exec.Command(bin, "render", "--defs", bundleDir)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.Output()
+	if err != nil {
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = string(ee.Stderr)
+		}
+		t.Fatalf("render full document failed: %v\nstderr: %s", err, stderr)
+	}
+
+	output := string(out)
+	if !strings.Contains(output, "<!DOCTYPE html>") && !strings.Contains(output, "<!doctype html>") {
+		t.Errorf("DOCTYPE should be preserved:\n%s", output)
+	}
+	if !strings.Contains(output, "<html>") {
+		t.Errorf("<html> should be preserved:\n%s", output)
+	}
+	if !strings.Contains(output, "<head>") {
+		t.Errorf("<head> should be preserved:\n%s", output)
+	}
+	if !strings.Contains(output, "<title>Test</title>") {
+		t.Errorf("<title> should be preserved:\n%s", output)
+	}
+	if !strings.Contains(output, "<body>") {
+		t.Errorf("<body> should be preserved:\n%s", output)
+	}
+	if !strings.Contains(output, `shadowrootmode="open"`) {
+		t.Errorf("missing DSD in output:\n%s", output)
+	}
+	if !strings.Contains(output, "Doc") {
+		t.Errorf("missing name in output:\n%s", output)
+	}
+}
+
+func TestRender_FragmentStillWorks(t *testing.T) {
+	bin := buildGolit(t)
+	bundleDir := buildTestBundles(t)
+
+	cmd := exec.Command(bin, "render", "--defs", bundleDir)
+	cmd.Stdin = strings.NewReader(`<my-greeting name="Frag"></my-greeting>`)
+	out, err := cmd.Output()
+	if err != nil {
+		stderr := ""
+		if ee, ok := err.(*exec.ExitError); ok {
+			stderr = string(ee.Stderr)
+		}
+		t.Fatalf("render fragment failed: %v\nstderr: %s", err, stderr)
+	}
+
+	output := string(out)
+	if strings.Contains(output, "<!DOCTYPE") || strings.Contains(output, "<!doctype") {
+		t.Errorf("fragment should NOT have DOCTYPE:\n%s", output)
+	}
+	if strings.Contains(output, "<html>") {
+		t.Errorf("fragment should NOT have <html> wrapper:\n%s", output)
+	}
+	if !strings.Contains(output, `shadowrootmode="open"`) {
+		t.Errorf("missing DSD in output:\n%s", output)
 	}
 }
 

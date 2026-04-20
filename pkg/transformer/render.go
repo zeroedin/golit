@@ -62,15 +62,27 @@ func renderHTMLWithContext(input string, ctx *transformContext) (string, error) 
 
 	var buf bytes.Buffer
 	buf.Grow(len(input) + len(input)/2)
-	if err := html.Render(&buf, doc); err != nil {
-		return "", fmt.Errorf("rendering HTML: %w", err)
+
+	if isFullDocument(input) {
+		if err := html.Render(&buf, doc); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+		return buf.String(), nil
 	}
 
-	result := buf.String()
-	if !isFullDocument(input) {
-		result = extractBodyContent(result)
+	body := findBodyNode(doc)
+	if body == nil {
+		if err := html.Render(&buf, doc); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+		return buf.String(), nil
 	}
-	return result, nil
+	for child := body.FirstChild; child != nil; child = child.NextSibling {
+		if err := html.Render(&buf, child); err != nil {
+			return "", fmt.Errorf("rendering HTML: %w", err)
+		}
+	}
+	return buf.String(), nil
 }
 
 // RenderFragment renders an HTML fragment.
@@ -261,6 +273,15 @@ func hasDeclarativeShadowRoot(node *html.Node) bool {
 
 func isFullDocument(input string) bool {
 	s := strings.TrimLeft(input, " \t\n\r\f")
+	s = strings.TrimPrefix(s, "\xEF\xBB\xBF")
+	s = strings.TrimLeft(s, " \t\n\r\f")
+	for strings.HasPrefix(s, "<!--") {
+		end := strings.Index(s, "-->")
+		if end == -1 {
+			break
+		}
+		s = strings.TrimLeft(s[end+3:], " \t\n\r\f")
+	}
 	if len(s) < 5 {
 		return false
 	}
@@ -305,12 +326,28 @@ func lastIndexFold(s, substr string) int {
 	return -1
 }
 
+func findBodyNode(n *html.Node) *html.Node {
+	if n.Type == html.ElementNode && n.DataAtom == atom.Body {
+		return n
+	}
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		if found := findBodyNode(child); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
 func extractBodyContent(rendered string) string {
-	bodyStart := indexFold(rendered, "<body>")
-	if bodyStart == -1 {
+	bodyTagStart := indexFold(rendered, "<body")
+	if bodyTagStart == -1 {
 		return rendered
 	}
-	bodyStart += len("<body>")
+	closeAngle := strings.IndexByte(rendered[bodyTagStart:], '>')
+	if closeAngle == -1 {
+		return rendered
+	}
+	bodyStart := bodyTagStart + closeAngle + 1
 	bodyEnd := lastIndexFold(rendered, "</body>")
 	if bodyEnd == -1 || bodyEnd < bodyStart {
 		return rendered

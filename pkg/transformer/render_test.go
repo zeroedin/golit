@@ -302,6 +302,30 @@ func TestRenderHTML_FragmentMode(t *testing.T) {
 	}
 }
 
+func TestRenderHTML_FragmentBodyExtraction(t *testing.T) {
+	engine := newMockEngine()
+	engine.addComponent("my-el", "<p>ok</p>", "")
+
+	registry := jsengine.NewRegistry()
+	registry.Register("my-el", "fake-bundle")
+
+	input := `<div><my-el></my-el></div>`
+	output, err := RenderHTMLWithEngine(input, engine, registry, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if strings.Contains(output, "<html>") {
+		t.Error("fragment input should not produce full document wrapper")
+	}
+	if strings.Contains(output, "<head>") {
+		t.Error("fragment output should not contain <head>")
+	}
+	if !strings.Contains(output, "shadowrootmode") {
+		t.Error("element should be expanded")
+	}
+}
+
 func TestIsFullDocument(t *testing.T) {
 	cases := []struct {
 		input string
@@ -314,6 +338,11 @@ func TestIsFullDocument(t *testing.T) {
 		{`<div>hello</div>`, false},
 		{`<my-element></my-element>`, false},
 		{``, false},
+		{"\xEF\xBB\xBF<!DOCTYPE html><html>", true},
+		{"\xEF\xBB\xBF  <html>", true},
+		{"<!-- generated -->\n<!DOCTYPE html><html>", true},
+		{"<!-- a --><!-- b -->\n<html>", true},
+		{"\xEF\xBB\xBF<!-- comment -->\n<!doctype html>", true},
 	}
 	for _, tc := range cases {
 		if got := isFullDocument(tc.input); got != tc.want {
@@ -332,6 +361,8 @@ func TestExtractBodyContent(t *testing.T) {
 		{`no body tags here`, `no body tags here`},
 		{`<html><BODY><p>upper</p></BODY></html>`, `<p>upper</p>`},
 		{`<html><Body><p>mixed</p></Body></html>`, `<p>mixed</p>`},
+		{`<html><body class="x"><p>attrs</p></body></html>`, `<p>attrs</p>`},
+		{`<html><head></head><body id="main" data-theme="dark"><div>content</div></body></html>`, `<div>content</div>`},
 	}
 	for _, tc := range cases {
 		if got := extractBodyContent(tc.input); got != tc.want {
