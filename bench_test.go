@@ -200,6 +200,10 @@ func BenchmarkTransformDir_200files_repeated_par(b *testing.B) {
 	benchmarkTransformDirRepeated(b, 200, runtime.NumCPU())
 }
 
+// 1000 files, 4 workers (simulates -j 4 stdio build)
+func BenchmarkTransformDir_1000files_4w(b *testing.B) { benchmarkTransformDir(b, 1000, 4) }
+func BenchmarkTransformDir_1000files_seq(b *testing.B) { benchmarkTransformDir(b, 1000, 1) }
+
 // Engine pool creation cost
 func BenchmarkEnginePoolCreate(b *testing.B) {
 	for i := 0; i < b.N; i++ {
