@@ -9,8 +9,9 @@ import (
 // Each engine is an isolated WASM module instance (via wazero) and can safely
 // run in its own goroutine.
 type EnginePool struct {
-	engines chan *Engine
-	size    int
+	engines     chan *Engine
+	size        int
+	sharedCache *SharedRenderCache
 }
 
 // NewEnginePool creates a pool of size engines. Each engine is initialized
@@ -23,12 +24,16 @@ func NewEnginePool(size int) (*EnginePool, error) {
 		engines: make(chan *Engine, size),
 		size:    size,
 	}
+	if size > 1 {
+		p.sharedCache = NewSharedRenderCache()
+	}
 	for i := 0; i < size; i++ {
 		e, err := NewEngine()
 		if err != nil {
 			p.Close()
 			return nil, fmt.Errorf("creating engine %d/%d: %w", i+1, size, err)
 		}
+		e.sharedCache = p.sharedCache
 		p.engines <- e
 	}
 	return p, nil

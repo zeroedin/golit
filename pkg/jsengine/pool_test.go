@@ -140,6 +140,146 @@ func TestEnginePool_BytecodePrecompilation(t *testing.T) {
 	}
 }
 
+func TestEnginePool_SharedCache_NotCreatedForSingleEngine(t *testing.T) {
+	pool, err := NewEnginePool(1)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if pool.sharedCache != nil {
+		t.Error("pool of size 1 should not have a shared cache")
+	}
+
+	e := pool.Get()
+	if e.sharedCache != nil {
+		t.Error("engine in pool of size 1 should not have a shared cache")
+	}
+	pool.Put(e)
+}
+
+func TestEnginePool_SharedCache_CreatedForMultipleEngines(t *testing.T) {
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if pool.sharedCache == nil {
+		t.Fatal("pool of size 2 should have a shared cache")
+	}
+
+	e1 := pool.Get()
+	e2 := pool.Get()
+
+	if e1.sharedCache == nil || e2.sharedCache == nil {
+		t.Error("both engines should have a shared cache reference")
+	}
+	if e1.sharedCache != e2.sharedCache {
+		t.Error("both engines should share the same cache instance")
+	}
+
+	pool.Put(e1)
+	pool.Put(e2)
+}
+
+func TestEnginePool_SharedCache_CrossEngineHit(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	registry := NewRegistry()
+	tagName, err := DiscoverTagName(bundle)
+	if err != nil {
+		t.Fatalf("DiscoverTagName: %v", err)
+	}
+	registry.Register(tagName, bundle)
+
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.PreloadAll(registry, nil); err != nil {
+		t.Fatalf("PreloadAll: %v", err)
+	}
+
+	attrs := map[string]string{"name": "Shared"}
+	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+
+	// Engine A renders via RenderBatch and populates the shared cache.
+	eA := pool.Get()
+	resultsA, err := eA.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine A render: %v", err)
+	}
+	pool.Put(eA)
+
+	if pool.sharedCache.Len() == 0 {
+		t.Fatal("shared cache should have entries after engine A render")
+	}
+
+	// Engine B should get the result from shared cache (L2 hit).
+	eB := pool.Get()
+	resultsB, err := eB.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine B render: %v", err)
+	}
+	pool.Put(eB)
+
+	if resultsA[0].HTML != resultsB[0].HTML {
+		t.Errorf("cross-engine results differ:\n  A: %s\n  B: %s", resultsA[0].HTML, resultsB[0].HTML)
+	}
+	if resultsA[0].CSS != resultsB[0].CSS {
+		t.Errorf("cross-engine CSS differs:\n  A: %s\n  B: %s", resultsA[0].CSS, resultsB[0].CSS)
+	}
+}
+
+func TestEnginePool_SharedCache_PromotesToL1(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	registry := NewRegistry()
+	tagName, err := DiscoverTagName(bundle)
+	if err != nil {
+		t.Fatalf("DiscoverTagName: %v", err)
+	}
+	registry.Register(tagName, bundle)
+
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.PreloadAll(registry, nil); err != nil {
+		t.Fatalf("PreloadAll: %v", err)
+	}
+
+	attrs := map[string]string{"name": "Promote"}
+	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+
+	// Engine A renders via RenderBatch — populates L1 + L2.
+	eA := pool.Get()
+	_, err = eA.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine A render: %v", err)
+	}
+	pool.Put(eA)
+
+	// Engine B renders — L2 hit, should promote to B's L1.
+	eB := pool.Get()
+	_, err = eB.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine B first render: %v", err)
+	}
+
+	key := renderCacheKey("my-greeting", attrs)
+	if _, ok := eB.renderCache[key]; !ok {
+		t.Error("shared cache hit should be promoted to engine B's local cache")
+	}
+
+	pool.Put(eB)
+}
+
 func TestEnginePool_ConcurrentRender(t *testing.T) {
 	bundle := bundleMyGreeting(t)
 
