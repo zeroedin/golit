@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/fastschema/qjs"
 )
 
 func TestEnginePool_GetPut(t *testing.T) {
@@ -229,10 +231,17 @@ func TestEnginePool_SharedCache_CrossEngineHit(t *testing.T) {
 		t.Fatal("shared cache should have entries after engine A render")
 	}
 
-	// Engine B renders — should get a shared cache (L2) hit.
+	// Sabotage engine B's JS render path so it can only succeed via L2.
+	eB.renderFnReady = true
+	_, evalErr := eB.ctx.Eval("sabotage-render.js", qjs.Code("globalThis.__golitRenderBatch = undefined;"))
+	if evalErr != nil {
+		t.Fatalf("disabling engine B JS render function: %v", evalErr)
+	}
+
+	// Engine B renders — must succeed via shared cache (L2) hit.
 	resultsB, err := eB.RenderBatch(reqs)
 	if err != nil {
-		t.Fatalf("engine B render: %v", err)
+		t.Fatalf("engine B render with JS path disabled: %v", err)
 	}
 
 	pool.Put(eA)
@@ -291,10 +300,17 @@ func TestEnginePool_SharedCache_PromotesToL1(t *testing.T) {
 		t.Fatalf("engine A render: %v", err)
 	}
 
-	// Engine B renders after A — shared cache hit should populate B's L1.
+	// Sabotage engine B's JS render path so it can only succeed via L2.
+	eB.renderFnReady = true
+	_, evalErr := eB.ctx.Eval("sabotage-render.js", qjs.Code("globalThis.__golitRenderBatch = undefined;"))
+	if evalErr != nil {
+		t.Fatalf("disabling engine B JS render function: %v", evalErr)
+	}
+
+	// Engine B renders after A — L2 hit should promote to B's L1.
 	_, err = eB.RenderBatch(reqs)
 	if err != nil {
-		t.Fatalf("engine B first render: %v", err)
+		t.Fatalf("engine B render with JS path disabled: %v", err)
 	}
 
 	if _, ok := eB.renderCache[key]; !ok {
