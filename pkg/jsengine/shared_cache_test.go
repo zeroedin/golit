@@ -6,7 +6,7 @@ import (
 )
 
 func TestSharedRenderCache_GetSet(t *testing.T) {
-	c := NewSharedRenderCache()
+	c := newSharedRenderCache()
 
 	if _, ok := c.get("missing"); ok {
 		t.Error("expected miss for absent key")
@@ -23,25 +23,25 @@ func TestSharedRenderCache_GetSet(t *testing.T) {
 }
 
 func TestSharedRenderCache_Len(t *testing.T) {
-	c := NewSharedRenderCache()
-	if c.Len() != 0 {
-		t.Fatalf("Len = %d, want 0", c.Len())
+	c := newSharedRenderCache()
+	if c.len() != 0 {
+		t.Fatalf("Len = %d, want 0", c.len())
 	}
 
 	c.set("a", renderCacheEntry{html: "a"})
 	c.set("b", renderCacheEntry{html: "b"})
-	if c.Len() != 2 {
-		t.Fatalf("Len = %d, want 2", c.Len())
+	if c.len() != 2 {
+		t.Fatalf("Len = %d, want 2", c.len())
 	}
 
 	c.set("a", renderCacheEntry{html: "a2"})
-	if c.Len() != 2 {
-		t.Fatalf("Len after overwrite = %d, want 2", c.Len())
+	if c.len() != 2 {
+		t.Fatalf("Len after overwrite = %d, want 2", c.len())
 	}
 }
 
 func TestSharedRenderCache_ConcurrentAccess(t *testing.T) {
-	c := NewSharedRenderCache()
+	c := newSharedRenderCache()
 	var wg sync.WaitGroup
 	n := 100
 
@@ -59,7 +59,7 @@ func TestSharedRenderCache_ConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
-	if c.Len() == 0 {
+	if c.len() == 0 {
 		t.Error("expected some entries after concurrent writes")
 	}
 }

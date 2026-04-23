@@ -45,7 +45,7 @@ type Engine struct {
 	preloadModules   []string                    // module names available via __preloadedModules
 	runtimeExternals []string                    // package prefixes bundled into @golit/runtime
 	renderCache      map[string]renderCacheEntry // L1: per-engine, lock-free
-	sharedCache      *SharedRenderCache          // L2: shared across pool engines
+	sharedCache      *sharedRenderCache          // L2: shared across pool engines
 	renderFnReady    bool                        // whether __golitRenderBatch is registered
 }
 

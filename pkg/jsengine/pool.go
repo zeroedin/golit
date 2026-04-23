@@ -11,7 +11,7 @@ import (
 type EnginePool struct {
 	engines     chan *Engine
 	size        int
-	sharedCache *SharedRenderCache
+	sharedCache *sharedRenderCache
 }
 
 // NewEnginePool creates a pool of size engines. Each engine is initialized
@@ -25,7 +25,7 @@ func NewEnginePool(size int) (*EnginePool, error) {
 		size:    size,
 	}
 	if size > 1 {
-		p.sharedCache = NewSharedRenderCache()
+		p.sharedCache = newSharedRenderCache()
 	}
 	for i := 0; i < size; i++ {
 		e, err := NewEngine()

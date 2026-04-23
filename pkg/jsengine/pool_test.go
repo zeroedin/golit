@@ -214,7 +214,7 @@ func TestEnginePool_SharedCache_CrossEngineHit(t *testing.T) {
 	}
 	pool.Put(eA)
 
-	if pool.sharedCache.Len() == 0 {
+	if pool.sharedCache.len() == 0 {
 		t.Fatal("shared cache should have entries after engine A render")
 	}
 
