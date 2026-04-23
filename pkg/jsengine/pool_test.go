@@ -205,25 +205,37 @@ func TestEnginePool_SharedCache_CrossEngineHit(t *testing.T) {
 
 	attrs := map[string]string{"name": "Shared"}
 	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+	key := renderCacheKey("my-greeting", attrs)
 
-	// Engine A renders via RenderBatch and populates the shared cache.
+	// Hold both engines so we know they are distinct instances.
 	eA := pool.Get()
+	eB := pool.Get()
+	if eA == eB {
+		t.Fatal("expected distinct engine instances")
+	}
+
+	// B must not have the entry in L1 before A renders.
+	if _, ok := eB.renderCache[key]; ok {
+		t.Fatal("engine B local cache unexpectedly already contains render entry")
+	}
+
+	// Engine A renders via RenderBatch and populates L1 + L2.
 	resultsA, err := eA.RenderBatch(reqs)
 	if err != nil {
 		t.Fatalf("engine A render: %v", err)
 	}
-	pool.Put(eA)
 
 	if pool.sharedCache.len() == 0 {
 		t.Fatal("shared cache should have entries after engine A render")
 	}
 
-	// Engine B should get the result from shared cache (L2 hit).
-	eB := pool.Get()
+	// Engine B renders — should get a shared cache (L2) hit.
 	resultsB, err := eB.RenderBatch(reqs)
 	if err != nil {
 		t.Fatalf("engine B render: %v", err)
 	}
+
+	pool.Put(eA)
 	pool.Put(eB)
 
 	if resultsA[0].HTML != resultsB[0].HTML {
@@ -256,28 +268,38 @@ func TestEnginePool_SharedCache_PromotesToL1(t *testing.T) {
 
 	attrs := map[string]string{"name": "Promote"}
 	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+	key := renderCacheKey("my-greeting", attrs)
+
+	// Hold both engines so we know B is distinct from A.
+	eA := pool.Get()
+	eB := pool.Get()
+	defer pool.Put(eA)
+	defer pool.Put(eB)
+
+	if eA == eB {
+		t.Fatal("expected distinct engine instances")
+	}
+
+	// Engine B must start without the entry in its local cache.
+	if _, ok := eB.renderCache[key]; ok {
+		t.Fatal("engine B local cache unexpectedly already contains render entry")
+	}
 
 	// Engine A renders via RenderBatch — populates L1 + L2.
-	eA := pool.Get()
 	_, err = eA.RenderBatch(reqs)
 	if err != nil {
 		t.Fatalf("engine A render: %v", err)
 	}
-	pool.Put(eA)
 
-	// Engine B renders — L2 hit, should promote to B's L1.
-	eB := pool.Get()
+	// Engine B renders after A — shared cache hit should populate B's L1.
 	_, err = eB.RenderBatch(reqs)
 	if err != nil {
 		t.Fatalf("engine B first render: %v", err)
 	}
 
-	key := renderCacheKey("my-greeting", attrs)
 	if _, ok := eB.renderCache[key]; !ok {
 		t.Error("shared cache hit should be promoted to engine B's local cache")
 	}
-
-	pool.Put(eB)
 }
 
 func TestEnginePool_ConcurrentRender(t *testing.T) {
