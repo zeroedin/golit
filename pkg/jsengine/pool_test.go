@@ -5,6 +5,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/fastschema/qjs"
 )
 
 func TestEnginePool_GetPut(t *testing.T) {
@@ -137,6 +139,182 @@ func TestEnginePool_BytecodePrecompilation(t *testing.T) {
 	}
 	if !strings.Contains(result.HTML, "Bytecode") {
 		t.Errorf("missing 'Bytecode' in output: %s", result.HTML)
+	}
+}
+
+func TestEnginePool_SharedCache_NotCreatedForSingleEngine(t *testing.T) {
+	pool, err := NewEnginePool(1)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if pool.sharedCache != nil {
+		t.Error("pool of size 1 should not have a shared cache")
+	}
+
+	e := pool.Get()
+	if e.sharedCache != nil {
+		t.Error("engine in pool of size 1 should not have a shared cache")
+	}
+	pool.Put(e)
+}
+
+func TestEnginePool_SharedCache_CreatedForMultipleEngines(t *testing.T) {
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if pool.sharedCache == nil {
+		t.Fatal("pool of size 2 should have a shared cache")
+	}
+
+	e1 := pool.Get()
+	e2 := pool.Get()
+
+	if e1.sharedCache == nil || e2.sharedCache == nil {
+		t.Error("both engines should have a shared cache reference")
+	}
+	if e1.sharedCache != e2.sharedCache {
+		t.Error("both engines should share the same cache instance")
+	}
+
+	pool.Put(e1)
+	pool.Put(e2)
+}
+
+func TestEnginePool_SharedCache_CrossEngineHit(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	registry := NewRegistry()
+	tagName, err := DiscoverTagName(bundle)
+	if err != nil {
+		t.Fatalf("DiscoverTagName: %v", err)
+	}
+	registry.Register(tagName, bundle)
+
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.PreloadAll(registry, nil); err != nil {
+		t.Fatalf("PreloadAll: %v", err)
+	}
+
+	attrs := map[string]string{"name": "Shared"}
+	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+	key := renderCacheKey("my-greeting", attrs)
+
+	// Hold both engines so we know they are distinct instances.
+	eA := pool.Get()
+	eB := pool.Get()
+	if eA == eB {
+		t.Fatal("expected distinct engine instances")
+	}
+
+	// B must not have the entry in L1 before A renders.
+	if _, ok := eB.renderCache[key]; ok {
+		t.Fatal("engine B local cache unexpectedly already contains render entry")
+	}
+
+	// Engine A renders via RenderBatch and populates L1 + L2.
+	resultsA, err := eA.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine A render: %v", err)
+	}
+
+	if pool.sharedCache.len() == 0 {
+		t.Fatal("shared cache should have entries after engine A render")
+	}
+
+	// Sabotage engine B's JS render path so it can only succeed via L2.
+	eB.renderFnReady = true
+	_, evalErr := eB.ctx.Eval("sabotage-render.js", qjs.Code("globalThis.__golitRenderBatch = undefined;"))
+	if evalErr != nil {
+		t.Fatalf("disabling engine B JS render function: %v", evalErr)
+	}
+
+	// Engine B renders — must succeed via shared cache (L2) hit.
+	resultsB, err := eB.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine B render with JS path disabled: %v", err)
+	}
+
+	pool.Put(eA)
+	pool.Put(eB)
+
+	if resultsA[0].HTML != resultsB[0].HTML {
+		t.Errorf("cross-engine results differ:\n  A: %s\n  B: %s", resultsA[0].HTML, resultsB[0].HTML)
+	}
+	if resultsA[0].CSS != resultsB[0].CSS {
+		t.Errorf("cross-engine CSS differs:\n  A: %s\n  B: %s", resultsA[0].CSS, resultsB[0].CSS)
+	}
+}
+
+func TestEnginePool_SharedCache_PromotesToL1(t *testing.T) {
+	bundle := bundleMyGreeting(t)
+
+	registry := NewRegistry()
+	tagName, err := DiscoverTagName(bundle)
+	if err != nil {
+		t.Fatalf("DiscoverTagName: %v", err)
+	}
+	registry.Register(tagName, bundle)
+
+	pool, err := NewEnginePool(2)
+	if err != nil {
+		t.Fatalf("NewEnginePool: %v", err)
+	}
+	defer pool.Close()
+
+	if err := pool.PreloadAll(registry, nil); err != nil {
+		t.Fatalf("PreloadAll: %v", err)
+	}
+
+	attrs := map[string]string{"name": "Promote"}
+	reqs := []BatchRequest{{ID: 1, TagName: "my-greeting", Attrs: attrs}}
+	key := renderCacheKey("my-greeting", attrs)
+
+	// Hold both engines so we know B is distinct from A.
+	eA := pool.Get()
+	eB := pool.Get()
+	defer pool.Put(eA)
+	defer pool.Put(eB)
+
+	if eA == eB {
+		t.Fatal("expected distinct engine instances")
+	}
+
+	// Engine B must start without the entry in its local cache.
+	if _, ok := eB.renderCache[key]; ok {
+		t.Fatal("engine B local cache unexpectedly already contains render entry")
+	}
+
+	// Engine A renders via RenderBatch — populates L1 + L2.
+	_, err = eA.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine A render: %v", err)
+	}
+
+	// Sabotage engine B's JS render path so it can only succeed via L2.
+	eB.renderFnReady = true
+	_, evalErr := eB.ctx.Eval("sabotage-render.js", qjs.Code("globalThis.__golitRenderBatch = undefined;"))
+	if evalErr != nil {
+		t.Fatalf("disabling engine B JS render function: %v", evalErr)
+	}
+
+	// Engine B renders after A — L2 hit should promote to B's L1.
+	_, err = eB.RenderBatch(reqs)
+	if err != nil {
+		t.Fatalf("engine B render with JS path disabled: %v", err)
+	}
+
+	if _, ok := eB.renderCache[key]; !ok {
+		t.Error("shared cache hit should be promoted to engine B's local cache")
 	}
 }
 

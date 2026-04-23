@@ -65,10 +65,16 @@ func benchmarkTransformDir(b *testing.B, fileCount, concurrency int) {
 	bundleDir := setupBenchBundles(b)
 	htmlDir := setupBenchHTML(b, fileCount)
 
-	entries, _ := os.ReadDir(htmlDir)
+	entries, err := os.ReadDir(htmlDir)
+	if err != nil {
+		b.Fatal(err)
+	}
 	origData := make(map[string][]byte, len(entries))
 	for _, e := range entries {
-		data, _ := os.ReadFile(filepath.Join(htmlDir, e.Name()))
+		data, err := os.ReadFile(filepath.Join(htmlDir, e.Name()))
+		if err != nil {
+			b.Fatal(err)
+		}
 		origData[e.Name()] = data
 	}
 
@@ -81,7 +87,9 @@ func benchmarkTransformDir(b *testing.B, fileCount, concurrency int) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for name, data := range origData {
-			os.WriteFile(filepath.Join(workDir, name), data, 0644)
+			if err := os.WriteFile(filepath.Join(workDir, name), data, 0644); err != nil {
+				b.Fatal(err)
+			}
 		}
 
 		_, err := transformer.TransformDir(workDir, transformer.Options{
@@ -113,6 +121,84 @@ func BenchmarkTransformDir_200files_par(b *testing.B) { benchmarkTransformDir(b,
 // 4 workers (lower overhead than 12)
 func BenchmarkTransformDir_100files_4w(b *testing.B)  { benchmarkTransformDir(b, 100, 4) }
 func BenchmarkTransformDir_50files_4w(b *testing.B)   { benchmarkTransformDir(b, 50, 4) }
+
+// setupBenchHTML_Repeated creates N HTML files where every page shares the
+// same component instances (common nav/footer pattern). This exercises the
+// cross-engine shared render cache.
+func setupBenchHTML_Repeated(b *testing.B, n int) string {
+	b.Helper()
+	dir := b.TempDir()
+
+	for i := 0; i < n; i++ {
+		content := fmt.Sprintf(`<!DOCTYPE html>
+<html><head><title>Page %d</title></head>
+<body>
+  <my-greeting name="SiteNav"></my-greeting>
+  <my-card subtitle="Featured">
+    <p>Page %d content</p>
+  </my-card>
+  <my-greeting name="Footer"></my-greeting>
+</body></html>`, i, i)
+		path := filepath.Join(dir, fmt.Sprintf("page-%03d.html", i))
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	return dir
+}
+
+func benchmarkTransformDirRepeated(b *testing.B, fileCount, concurrency int) {
+	bundleDir := setupBenchBundles(b)
+	htmlDir := setupBenchHTML_Repeated(b, fileCount)
+
+	entries, err := os.ReadDir(htmlDir)
+	if err != nil {
+		b.Fatal(err)
+	}
+	origData := make(map[string][]byte, len(entries))
+	for _, e := range entries {
+		data, err := os.ReadFile(filepath.Join(htmlDir, e.Name()))
+		if err != nil {
+			b.Fatal(err)
+		}
+		origData[e.Name()] = data
+	}
+
+	workDir, err := os.MkdirTemp("", "golit-bench-rep-*")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.RemoveAll(workDir)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for name, data := range origData {
+			if err := os.WriteFile(filepath.Join(workDir, name), data, 0644); err != nil {
+				b.Fatal(err)
+			}
+		}
+
+		_, err := transformer.TransformDir(workDir, transformer.Options{
+			DefsDir:     bundleDir,
+			Concurrency: concurrency,
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// Repeated elements (shared cache beneficial)
+func BenchmarkTransformDir_100files_repeated_seq(b *testing.B) {
+	benchmarkTransformDirRepeated(b, 100, 1)
+}
+func BenchmarkTransformDir_100files_repeated_par(b *testing.B) {
+	benchmarkTransformDirRepeated(b, 100, runtime.NumCPU())
+}
+func BenchmarkTransformDir_200files_repeated_par(b *testing.B) {
+	benchmarkTransformDirRepeated(b, 200, runtime.NumCPU())
+}
 
 // Engine pool creation cost
 func BenchmarkEnginePoolCreate(b *testing.B) {

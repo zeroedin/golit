@@ -44,7 +44,8 @@ type Engine struct {
 	loaded           map[string]bool             // track which bundles have been loaded
 	preloadModules   []string                    // module names available via __preloadedModules
 	runtimeExternals []string                    // package prefixes bundled into @golit/runtime
-	renderCache      map[string]renderCacheEntry // cache by "tagName\x00key=val\x00key=val"
+	renderCache      map[string]renderCacheEntry // L1: per-engine, lock-free
+	sharedCache      *sharedRenderCache          // L2: shared across pool engines
 	renderFnReady    bool                        // whether __golitRenderBatch is registered
 }
 
@@ -520,6 +521,20 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 				CSS:     entry.css,
 				TagName: req.TagName,
 			}
+		} else if e.sharedCache != nil {
+			if entry, ok := e.sharedCache.get(key); ok {
+				e.renderCache[key] = entry
+				results[i] = BatchResult{
+					ID:      req.ID,
+					HTML:    entry.html,
+					CSS:     entry.css,
+					TagName: req.TagName,
+				}
+			} else {
+				uncached = append(uncached, req)
+				uncachedIdx = append(uncachedIdx, i)
+				uncachedKeys = append(uncachedKeys, key)
+			}
 		} else {
 			uncached = append(uncached, req)
 			uncachedIdx = append(uncachedIdx, i)
@@ -588,7 +603,11 @@ func (e *Engine) RenderBatch(requests []BatchRequest) ([]BatchResult, error) {
 		results[origIdx] = r
 
 		if r.Error == "" {
-			e.renderCache[uncachedKeys[j]] = renderCacheEntry{html: r.HTML, css: r.CSS}
+			entry := renderCacheEntry{html: r.HTML, css: r.CSS}
+			e.renderCache[uncachedKeys[j]] = entry
+			if e.sharedCache != nil {
+				e.sharedCache.set(uncachedKeys[j], entry)
+			}
 		}
 	}
 
