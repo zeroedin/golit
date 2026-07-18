@@ -410,9 +410,9 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		return nil
 	}
 
-	nodeModulesDir := FindNodeModules(paths[0])
+	nodePaths := FindAllNodeModules(paths[0])
 
-	externals, err := DiscoverExternalPackages(paths, nodeModulesDir)
+	externals, err := DiscoverExternalPackages(paths, nodePaths)
 	if err != nil {
 		return fmt.Errorf("discovering external packages: %w", err)
 	}
@@ -424,8 +424,8 @@ func (r *Registry) LoadSourceDir(dir string) error {
 		return fmt.Errorf("batch bundling sources: %w", err)
 	}
 
-	if r.SharedRuntime() == "" && nodeModulesDir != "" {
-		rt, err := BundleSharedRuntime(nodeModulesDir, modules)
+	if r.SharedRuntime() == "" && len(nodePaths) > 0 {
+		rt, err := BundleSharedRuntime(nodePaths, modules)
 		if err != nil {
 			return fmt.Errorf("building shared runtime: %w", err)
 		}

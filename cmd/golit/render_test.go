@@ -44,8 +44,8 @@ func buildTestBundles(t *testing.T) string {
 		filepath.Join(root, "testdata", "sources", "my-greeting.js"),
 	}
 
-	nodeModulesDir := jsengine.FindNodeModules(sources[0])
-	externals, err := jsengine.DiscoverExternalPackages(sources, nodeModulesDir)
+	nodePaths := jsengine.FindAllNodeModules(sources[0])
+	externals, err := jsengine.DiscoverExternalPackages(sources, nodePaths)
 	if err != nil {
 		t.Fatalf("discovering externals: %v", err)
 	}
@@ -57,8 +57,8 @@ func buildTestBundles(t *testing.T) string {
 		t.Fatalf("bundling modules: %v", err)
 	}
 
-	if nodeModulesDir != "" {
-		rt, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules)
+	if len(nodePaths) > 0 {
+		rt, err := jsengine.BundleSharedRuntime(nodePaths, modules)
 		if err != nil {
 			t.Fatalf("building shared runtime: %v", err)
 		}

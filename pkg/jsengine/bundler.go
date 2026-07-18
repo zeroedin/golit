@@ -63,7 +63,7 @@ type BundleOptions struct {
 // DiscoverExternalPackages runs esbuild with Metafile enabled on all
 // component entry points to discover which node_modules packages they
 // depend on. Returns esbuild-compatible external patterns (pkg + pkg/*).
-func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, opts ...BundleOptions) ([]string, error) {
+func DiscoverExternalPackages(componentPaths []string, nodePaths []string, opts ...BundleOptions) ([]string, error) {
 	opt := BundleOptions{}
 	if len(opts) > 0 {
 		opt = opts[0]
@@ -118,7 +118,7 @@ func DiscoverExternalPackages(componentPaths []string, nodeModulesDir string, op
 		Metafile:            true,
 		Write:               false,
 		Outdir:              sd,
-		NodePaths:           []string{nodeModulesDir},
+		NodePaths:           nodePaths,
 		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:             buildPlugins(opt),
 		Conditions:          []string{"node"},
@@ -230,7 +230,7 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 		return "", fmt.Errorf("preparing shim files: %w", err)
 	}
 
-	nodeModulesDir := findNodeModules(absPath)
+	nodePaths := findAllNodeModules(absPath)
 	sourceDir := filepath.Dir(absPath)
 
 	result := api.Build(api.BuildOptions{
@@ -243,7 +243,7 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
-		NodePaths:        []string{nodeModulesDir},
+		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
 		Conditions:       []string{"node"},
@@ -448,7 +448,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 	}
 
 	cwd, _ := os.Getwd()
-	nodeModulesDir := findNodeModules(filepath.Join(cwd, "dummy"))
+	nodePaths := findAllNodeModules(filepath.Join(cwd, "dummy"))
 
 	result := api.Build(api.BuildOptions{
 		Stdin: &api.StdinOptions{
@@ -464,7 +464,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
-		NodePaths:        []string{nodeModulesDir},
+		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
 		Conditions:       []string{"node"},
@@ -592,7 +592,7 @@ func parseExportList(body string) []string {
 // Engine.LoadModule("@golit/runtime", source).
 // modules is the map of thin module sources (from BundleComponentModules)
 // used to discover which external specifiers to include.
-func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts ...BundleOptions) (string, error) {
+func BundleSharedRuntime(nodePaths []string, modules map[string]string, opts ...BundleOptions) (string, error) {
 	opt := BundleOptions{}
 	if len(opts) > 0 {
 		opt = opts[0]
@@ -626,7 +626,7 @@ func BundleSharedRuntime(nodeModulesDir string, modules map[string]string, opts 
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
-		NodePaths:        []string{nodeModulesDir},
+		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
 		Conditions:       []string{"node"},
@@ -677,7 +677,7 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		return "", fmt.Errorf("preparing shim files: %w", err)
 	}
 
-	nodeModulesDir := findNodeModules(absPath)
+	nodePaths := findAllNodeModules(absPath)
 	sourceDir := filepath.Dir(absPath)
 
 	result := api.Build(api.BuildOptions{
@@ -691,7 +691,7 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
 		MinifySyntax:     opt.Minify,
-		NodePaths:        []string{nodeModulesDir},
+		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
 		Conditions:       []string{"node"},
@@ -752,7 +752,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		return nil, fmt.Errorf("preparing shim files: %w", err)
 	}
 
-	nodeModulesDir := findNodeModules(entries[0].absPath)
+	nodePaths := findAllNodeModules(entries[0].absPath)
 
 	esbuildEntries := make([]api.EntryPoint, len(entries))
 	keyToPath := make(map[string]string, len(entries))
@@ -776,7 +776,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		Outdir:              sd,
 		MinifyWhitespace:    opt.Minify,
 		MinifySyntax:        opt.Minify,
-		NodePaths:           []string{nodeModulesDir},
+		NodePaths:           nodePaths,
 		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:             buildPlugins(opt),
 		Conditions:          []string{"node"},
@@ -1117,59 +1117,59 @@ func ResolveModulePath(specifier string, fromDir string) (string, error) {
 		return filepath.Abs(specifier)
 	}
 
-	nmDir := findNodeModules(filepath.Join(fromDir, "dummy"))
-	if nmDir == "" {
+	nmDirs := findAllNodeModules(filepath.Join(fromDir, "dummy"))
+	if len(nmDirs) == 0 {
 		return "", fmt.Errorf("node_modules not found from %s", fromDir)
 	}
 
-	// Try the specifier as a direct file path under node_modules first.
-	// This handles subpath specifiers like "@rhds/tokens/css/default-theme.css.js"
-	// or "prism-esm/components/prism-css.js".
-	directPath := filepath.Join(nmDir, specifier)
-	if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
-		return directPath, nil
-	}
-
-	// Extract the package name for package.json lookup.
 	pkgName := extractPackageName(specifier)
-	pkgDir := filepath.Join(nmDir, pkgName)
-	pkgJSON := filepath.Join(pkgDir, "package.json")
 
-	data, err := os.ReadFile(pkgJSON)
-	if err != nil {
-		for _, candidate := range []string{
-			filepath.Join(pkgDir, "index.js"),
-			filepath.Join(pkgDir, pkgName+".js"),
-		} {
-			if _, err := os.Stat(candidate); err == nil {
-				return candidate, nil
-			}
+	for _, nmDir := range nmDirs {
+		directPath := filepath.Join(nmDir, specifier)
+		if info, err := os.Stat(directPath); err == nil && !info.IsDir() {
+			return directPath, nil
 		}
-		return "", fmt.Errorf("cannot resolve module %q: %w", specifier, err)
+
+		pkgDir := filepath.Join(nmDir, pkgName)
+		pkgJSON := filepath.Join(pkgDir, "package.json")
+
+		data, err := os.ReadFile(pkgJSON)
+		if err != nil {
+			for _, candidate := range []string{
+				filepath.Join(pkgDir, "index.js"),
+				filepath.Join(pkgDir, pkgName+".js"),
+			} {
+				if _, err := os.Stat(candidate); err == nil {
+					return candidate, nil
+				}
+			}
+			continue
+		}
+
+		type PkgJSON struct {
+			Module string `json:"module"`
+			Main   string `json:"main"`
+		}
+		var pkg PkgJSON
+		if err := json.Unmarshal(data, &pkg); err != nil {
+			return "", fmt.Errorf("parsing %s: %w", pkgJSON, err)
+		}
+
+		entry := pkg.Module
+		if entry == "" {
+			entry = pkg.Main
+		}
+		if entry == "" {
+			entry = "index.js"
+		}
+
+		resolved := filepath.Join(pkgDir, entry)
+		if _, err := os.Stat(resolved); err == nil {
+			return resolved, nil
+		}
 	}
 
-	type PkgJSON struct {
-		Module string `json:"module"`
-		Main   string `json:"main"`
-	}
-	var pkg PkgJSON
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		return "", fmt.Errorf("parsing %s: %w", pkgJSON, err)
-	}
-
-	entry := pkg.Module
-	if entry == "" {
-		entry = pkg.Main
-	}
-	if entry == "" {
-		entry = "index.js"
-	}
-
-	resolved := filepath.Join(pkgDir, entry)
-	if _, err := os.Stat(resolved); err != nil {
-		return "", fmt.Errorf("module entry %s not found", resolved)
-	}
-	return resolved, nil
+	return "", fmt.Errorf("cannot resolve module %q from %s", specifier, fromDir)
 }
 
 // extractPackageName returns the npm package name from a specifier.
@@ -1195,17 +1195,20 @@ func SaveBundle(bundle string, path string) error {
 	return fileutil.WriteFileAtomic(path, []byte(bundle), 0644)
 }
 
-// FindNodeModules walks up from the given path to find node_modules.
-func FindNodeModules(fromPath string) string {
-	return findNodeModules(fromPath)
+// FindAllNodeModules walks up from the given path and returns all
+// node_modules directories found. This handles nested node_modules
+// where a package's dependencies are split across multiple levels.
+func FindAllNodeModules(fromPath string) []string {
+	return findAllNodeModules(fromPath)
 }
 
-func findNodeModules(fromPath string) string {
+func findAllNodeModules(fromPath string) []string {
+	var dirs []string
 	dir := filepath.Dir(fromPath)
 	for {
 		candidate := filepath.Join(dir, "node_modules")
 		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
+			dirs = append(dirs, candidate)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -1213,5 +1216,5 @@ func findNodeModules(fromPath string) string {
 		}
 		dir = parent
 	}
-	return ""
+	return dirs
 }

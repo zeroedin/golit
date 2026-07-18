@@ -117,12 +117,12 @@ func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) er
 		return nil
 	}
 
-	nodeModulesDir := jsengine.FindNodeModules(paths[0])
-	if nodeModulesDir == "" {
+	nodePaths := jsengine.FindAllNodeModules(paths[0])
+	if len(nodePaths) == 0 {
 		return fmt.Errorf("node_modules not found from %s", paths[0])
 	}
 
-	externals, err := jsengine.DiscoverExternalPackages(paths, nodeModulesDir, opts)
+	externals, err := jsengine.DiscoverExternalPackages(paths, nodePaths, opts)
 	if err != nil {
 		return fmt.Errorf("discovering external packages: %w", err)
 	}
@@ -133,7 +133,7 @@ func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) er
 		return fmt.Errorf("batch bundling modules: %w", err)
 	}
 
-	runtime, err := jsengine.BundleSharedRuntime(nodeModulesDir, modules, opts)
+	runtime, err := jsengine.BundleSharedRuntime(nodePaths, modules, opts)
 	if err != nil {
 		return fmt.Errorf("building shared runtime: %w", err)
 	}
