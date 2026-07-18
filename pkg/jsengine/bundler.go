@@ -51,13 +51,32 @@ func ensureShimDir() (string, string, string, error) {
 
 // BundleOptions configures the component bundling.
 type BundleOptions struct {
-	// Minify minifies the output bundle.
-	Minify bool
-
-	// ExternalPackages lists package specifiers to mark as external.
-	// Discovered via DiscoverExternalPackages and passed to
-	// BundleComponentModule(s) so shared deps stay as import statements.
+	Minify           bool
 	ExternalPackages []string
+	Format           api.Format
+	Target           api.Target
+	Platform         api.Platform
+	MainFields       []string
+	Conditions       []string
+}
+
+func (o BundleOptions) defaults() BundleOptions {
+	if o.Format == 0 {
+		o.Format = api.FormatESModule
+	}
+	if o.Target == 0 {
+		o.Target = api.ES2022
+	}
+	if o.Platform == 0 {
+		o.Platform = api.PlatformNeutral
+	}
+	if o.MainFields == nil {
+		o.MainFields = []string{"module", "main"}
+	}
+	if o.Conditions == nil {
+		o.Conditions = []string{"browser"}
+	}
+	return o
 }
 
 // DiscoverExternalPackages runs esbuild with Metafile enabled on all
@@ -68,6 +87,7 @@ func DiscoverExternalPackages(componentPaths []string, nodePaths []string, opts 
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	opt = opt.defaults()
 
 	sp, cp, _, err := ensureShimDir()
 	if err != nil {
@@ -111,10 +131,10 @@ func DiscoverExternalPackages(componentPaths []string, nodePaths []string, opts 
 	result := api.Build(api.BuildOptions{
 		EntryPointsAdvanced: esbuildEntries,
 		Bundle:              true,
-		Format:              api.FormatESModule,
-		Target:              api.ES2022,
-		Platform:            api.PlatformNeutral,
-		MainFields:          []string{"module", "main"},
+		Format:              opt.Format,
+		Target:              opt.Target,
+		Platform:            opt.Platform,
+		MainFields:          opt.MainFields,
 		Inject:              []string{sp, cp},
 		Metafile:            true,
 		Write:               false,
@@ -122,7 +142,7 @@ func DiscoverExternalPackages(componentPaths []string, nodePaths []string, opts 
 		NodePaths:           nodePaths,
 		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:             buildPlugins(opt),
-		Conditions:          []string{"node"},
+		Conditions:          opt.Conditions,
 		LogLevel:            api.LogLevelSilent,
 	})
 
@@ -217,6 +237,7 @@ func bundleComponent(componentPath string, opt BundleOptions) (string, error) {
 // bundleComponentRaw runs esbuild and returns the raw ESM output before
 // any post-processing (export stripping, async wrapping).
 func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error) {
+	opt = opt.defaults()
 	absPath, err := filepath.Abs(componentPath)
 	if err != nil {
 		return "", fmt.Errorf("resolving path: %w", err)
@@ -237,10 +258,10 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 	result := api.Build(api.BuildOptions{
 		EntryPoints:      []string{absPath},
 		Bundle:           true,
-		Format:           api.FormatESModule,
-		Target:           api.ES2022,
-		Platform:         api.PlatformNeutral,
-		MainFields:       []string{"module", "main"},
+		Format:           opt.Format,
+		Target:           opt.Target,
+		Platform:         opt.Platform,
+		MainFields:       opt.MainFields,
 		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
@@ -248,7 +269,7 @@ func bundleComponentRaw(componentPath string, opt BundleOptions) (string, error)
 		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
-		Conditions:       []string{"node"},
+		Conditions:       opt.Conditions,
 		LogLevel:         api.LogLevelSilent,
 		AbsWorkingDir:    sourceDir,
 	})
@@ -443,6 +464,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	opt = opt.defaults()
 
 	sp, cp, _, err := ensureShimDir()
 	if err != nil {
@@ -459,10 +481,10 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 			Loader:     api.LoaderTS,
 		},
 		Bundle:           true,
-		Format:           api.FormatESModule,
-		Target:           api.ES2022,
-		Platform:         api.PlatformNeutral,
-		MainFields:       []string{"module", "main"},
+		Format:           opt.Format,
+		Target:           opt.Target,
+		Platform:         opt.Platform,
+		MainFields:       opt.MainFields,
 		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
@@ -470,7 +492,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
-		Conditions:       []string{"node"},
+		Conditions:       opt.Conditions,
 		LogLevel:         api.LogLevelSilent,
 	})
 
@@ -600,6 +622,7 @@ func BundleSharedRuntime(nodePaths []string, modules map[string]string, opts ...
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	opt = opt.defaults()
 
 	sp, cp, _, err := ensureShimDir()
 	if err != nil {
@@ -622,10 +645,10 @@ func BundleSharedRuntime(nodePaths []string, modules map[string]string, opts ...
 	result := api.Build(api.BuildOptions{
 		EntryPoints:      []string{entryPath},
 		Bundle:           true,
-		Format:           api.FormatESModule,
-		Target:           api.ES2022,
-		Platform:         api.PlatformNeutral,
-		MainFields:       []string{"module", "main"},
+		Format:           opt.Format,
+		Target:           opt.Target,
+		Platform:         opt.Platform,
+		MainFields:       opt.MainFields,
 		Inject:           []string{sp, cp},
 		Write:            false,
 		MinifyWhitespace: opt.Minify,
@@ -633,7 +656,7 @@ func BundleSharedRuntime(nodePaths []string, modules map[string]string, opts ...
 		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
-		Conditions:       []string{"node"},
+		Conditions:       opt.Conditions,
 		LogLevel:         api.LogLevelSilent,
 	})
 
@@ -668,6 +691,7 @@ func BundleComponentModule(componentPath string, opts ...BundleOptions) (string,
 }
 
 func bundleComponentModule(componentPath string, opt BundleOptions) (string, error) {
+	opt = opt.defaults()
 	absPath, err := filepath.Abs(componentPath)
 	if err != nil {
 		return "", fmt.Errorf("resolving path: %w", err)
@@ -687,10 +711,10 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 	result := api.Build(api.BuildOptions{
 		EntryPoints:      []string{absPath},
 		Bundle:           true,
-		Format:           api.FormatESModule,
-		Target:           api.ES2022,
-		Platform:         api.PlatformNeutral,
-		MainFields:       []string{"module", "main"},
+		Format:           opt.Format,
+		Target:           opt.Target,
+		Platform:         opt.Platform,
+		MainFields:       opt.MainFields,
 		External:         opt.ExternalPackages,
 		Inject:           []string{sp, cp},
 		Write:            false,
@@ -699,7 +723,7 @@ func bundleComponentModule(componentPath string, opt BundleOptions) (string, err
 		NodePaths:        nodePaths,
 		TsconfigRaw:      `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:          buildPlugins(opt),
-		Conditions:       []string{"node"},
+		Conditions:       opt.Conditions,
 		LogLevel:         api.LogLevelSilent,
 		AbsWorkingDir:    sourceDir,
 	})
@@ -726,6 +750,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 	if len(opts) > 0 {
 		opt = opts[0]
 	}
+	opt = opt.defaults()
 
 	if len(componentPaths) == 0 {
 		return nil, nil
@@ -772,10 +797,10 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 	result := api.Build(api.BuildOptions{
 		EntryPointsAdvanced: esbuildEntries,
 		Bundle:              true,
-		Format:              api.FormatESModule,
-		Target:              api.ES2022,
-		Platform:            api.PlatformNeutral,
-		MainFields:          []string{"module", "main"},
+		Format:              opt.Format,
+		Target:              opt.Target,
+		Platform:            opt.Platform,
+		MainFields:          opt.MainFields,
 		External:            opt.ExternalPackages,
 		Inject:              []string{sp, cp},
 		Write:               false,
@@ -785,7 +810,7 @@ func BundleComponentModules(componentPaths []string, opts ...BundleOptions) (map
 		NodePaths:           nodePaths,
 		TsconfigRaw:         `{"compilerOptions":{"experimentalDecorators":true,"useDefineForClassFields":false}}`,
 		Plugins:             buildPlugins(opt),
-		Conditions:          []string{"node"},
+		Conditions:          opt.Conditions,
 		LogLevel:            api.LogLevelSilent,
 	})
 

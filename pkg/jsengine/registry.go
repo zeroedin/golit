@@ -21,6 +21,10 @@ var defineRe = regexp.MustCompile(`customElements\s*\.\s*define\s*\(\s*['"]([a-z
 // thin ESM modules: customElement("tag-name") or customElement3("tag-name").
 var decoratorDefineRe = regexp.MustCompile(`customElement\d*\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
 
+// decorateClassRe matches esbuild's minified decorator pattern where
+// @customElement("tag-name") becomes __decorateClass([t3("tag-name")], ClassName).
+var decorateClassRe = regexp.MustCompile(`__decorateClass\s*\(\s*\[\s*\w+\s*\(\s*['"]([a-z][a-z0-9]*(?:-[a-z0-9]+)+)['"]`)
+
 
 // Registry manages loaded component modules and tracks which tag names
 // are available for rendering. All methods are safe for concurrent use.
@@ -115,7 +119,11 @@ func (r *Registry) LoadDir(dir string) error {
 			}
 			source := string(data)
 			moduleSources[name] = source
-			if tagName, ok := discoverTagNameFast(source); ok {
+			tagName := tagNameFromFilename(name)
+			if tagName == "" {
+				tagName, _ = discoverTagNameFast(source)
+			}
+			if tagName != "" {
 				r.RegisterModule(tagName, source)
 			}
 		}
@@ -550,5 +558,19 @@ func discoverTagNameFast(source string) (string, bool) {
 		return matches[len(matches)-1][1], true
 	}
 
+	matches = decorateClassRe.FindAllStringSubmatch(source, -1)
+	if len(matches) > 0 {
+		return matches[len(matches)-1][1], true
+	}
+
 	return "", false
+}
+
+func tagNameFromFilename(name string) string {
+	name = strings.TrimSuffix(name, ".golit.module.js")
+	name = strings.TrimSuffix(name, ".golit.bundle.js")
+	if strings.Contains(name, "-") {
+		return name
+	}
+	return ""
 }

@@ -107,31 +107,17 @@ func TestDiscoverTagNameFast_RealBundle(t *testing.T) {
 	}
 }
 
-func TestDiscoverTagNameFast_DecoratorBundle_MissesVariableDefine(t *testing.T) {
+func TestDiscoverTagNameFast_DecoratorBundle(t *testing.T) {
 	bundle, err := BundleComponent("../../testdata/sources/my-card.ts")
 	if err != nil {
 		t.Fatalf("bundling my-card: %v", err)
 	}
 
-	// Decorator-compiled bundles use customElements.define(variable, ctor)
-	// instead of a string literal, so the regex correctly returns false.
-	_, ok := discoverTagNameFast(bundle)
-	if ok {
-		t.Error("regex should miss decorator bundles that use variable tag names")
+	tag, ok := discoverTagNameFast(bundle)
+	if !ok {
+		t.Fatal("expected to find tag name in decorator bundle via __decorateClass pattern")
 	}
-}
-
-func TestDiscoverTagName_DecoratorBundle(t *testing.T) {
-	bundle, err := BundleComponent("../../testdata/sources/my-card.ts")
-	if err != nil {
-		t.Fatalf("bundling my-card: %v", err)
-	}
-
-	tag, err := DiscoverTagName(bundle)
-	// Decorator bundles use customElements.define(variable, ctor) which the
-	// regex may miss — that's acceptable since thin modules use the
-	// @customElement("tag") decorator pattern that the regex does catch.
-	if err == nil && tag != "my-card" {
+	if tag != "my-card" {
 		t.Errorf("tag = %q, want %q", tag, "my-card")
 	}
 }

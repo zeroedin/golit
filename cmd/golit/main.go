@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	golit bundle <source.ts|js> [--out <file>] [--minify]
+//	golit bundle <source.ts|js> [--out <file>] [--minify] [--target es2022] [--platform neutral]
 //	golit transform <html-dir> --defs <bundles-dir> [--out <dir>] [--verbose]
 //	golit render --defs <bundles-dir> '<html-fragment>'
 //	echo '<html>' | golit render --defs <bundles-dir>
@@ -67,8 +67,8 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `golit - Lit SSR in pure Go (QJS engine)
 
 Usage:
-  golit bundle <source.ts|js> [--out <file.golit.module.js>] [--minify]
-  golit bundle <src-dir/> [--out <modules-dir/>] [--minify]
+  golit bundle <source.ts|js> [--out <file.golit.module.js>] [options]
+  golit bundle <src-dir/> [--out <modules-dir/>] [options]
   golit compile --defs <bundles-dir> [--out <file.golit.compiled.js>] [--minify]
   golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
   golit render --defs <bundles-dir> '<html-fragment>'
@@ -98,6 +98,11 @@ Options:
   --importmap <file> Import map JSON file for resolving bare-module specifiers
   --ignore <tag>     Skip SSR for this custom element (repeatable)
   --minify           Minify the output bundle
+  --target <val>     ES target (esnext, es2015-es2024; default: es2022)
+  --format <val>     Output format (esm, cjs, iife; default: esm)
+  --platform <val>   Platform (neutral, browser, node; default: neutral)
+  --conditions <val> Export conditions, comma-separated (default: browser)
+  --main-fields <v>  package.json fields, comma-separated (default: module,main)
   --verbose          Print progress to stderr
   --dry-run          Process files without writing changes
   --strict           Exit with error if any components fail to render
