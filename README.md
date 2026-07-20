@@ -1,16 +1,16 @@
 # golit
 
-**Lit SSR in pure Go.** Server-side render Lit web components into [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom) HTML -- no Node.js at build time.
+**Lit SSR in pure Go.** Server-side render Lit web components into [Declarative Shadow DOM](https://developer.chrome.com/docs/css-ui/declarative-shadow-dom) HTML without Node.js.
 
-golit executes your actual Lit component code using an embedded JavaScript engine (QuickJS via WebAssembly) to produce Declarative Shadow DOM HTML. classMap, directives, private fields, reactive state -- everything works because the real component `render()` method runs. Built entirely in Go with zero CGo dependencies.
+golit runs your Lit component code in an embedded JavaScript engine (QuickJS via WebAssembly) and produces Declarative Shadow DOM HTML. classMap, directives, private fields, reactive state all work because the real component `render()` method executes. Built in Go with zero CGo dependencies.
 
 ## Why
 
-Lit web components render empty shells until JavaScript loads. The official `@lit-labs/ssr` requires Node.js, which adds complexity and slows down Go-based SSG build pipelines. golit brings full-fidelity Lit SSR into a single Go binary.
+Lit web components render empty shells until JavaScript loads. The official `@lit-labs/ssr` requires Node.js, which adds complexity and slows Go-based SSG builds. golit puts full-fidelity Lit SSR in a single Go binary.
 
 **Before golit:** Users see a blank component until JS downloads, parses, and executes.
 
-**After golit:** Users see fully rendered content immediately. Lit hydrates in the background for interactivity.
+**After golit:** Users see rendered content on first paint. Lit hydrates for interactivity in the background.
 
 ## Quick Start
 
@@ -19,18 +19,18 @@ Lit web components render empty shells until JavaScript loads. The official `@li
 - Go 1.25+
 - Component source files available **locally on disk** (installed via npm)
 
-golit bundles and executes component source code at build time using esbuild. This requires the component library and all of its dependencies to be installed locally -- typically via `npm install` in your project.
+golit bundles and executes component source code at build time using esbuild. The component library and its dependencies must be installed locally, via `npm install` in your project.
 
 ```bash
 npm install @rhds/elements   # or whatever component library you use
 ```
 
-**CDN import maps are not supported for SSR.** If your HTML uses a CDN-based import map (e.g. `https://ga.jspm.io/...`), golit cannot fetch and bundle from remote URLs. You must either:
+**CDN import maps are not supported for SSR.** golit cannot fetch and bundle from remote URLs. If your HTML uses a CDN-based import map (e.g. `https://ga.jspm.io/...`), you must either:
 - Install the packages locally and use an import map with local paths for golit
 - Use `--sources` to point at the local `node_modules` directory
 - Use `--importmap` with a build-time import map that resolves to local files
 
-The browser still uses your CDN import map at runtime for hydration and interactivity -- golit only needs local files during the build.
+The browser still uses your CDN import map at runtime for hydration. golit only needs local files during the build.
 
 ### Install
 
@@ -67,7 +67,7 @@ Then run golit:
 golit transform public/
 ```
 
-That's it. golit reads the import map and module imports from your HTML, resolves them to local files, bundles and executes the components, and injects Declarative Shadow DOM. No configuration files, no separate bundle step.
+golit reads the import map and module imports from your HTML, resolves them to local files, bundles and executes the components, and injects Declarative Shadow DOM. No configuration files, no separate bundle step.
 
 > **Note:** The import map paths must resolve to files on disk. If your production HTML uses CDN URLs in the import map, provide a separate build-time import map via `--importmap` that points to local `node_modules`.
 
@@ -101,7 +101,7 @@ golit transform public/ --sources node_modules/@rhds/elements/elements/
 
 ### Mode 4: Pre-Bundled
 
-For CI/CD or when you want maximum transform speed, pre-bundle components and point at the output directory. Bundling a directory automatically discovers shared dependencies, produces a shared runtime module, and thin per-component ES modules.
+For CI/CD or when you want maximum transform speed, pre-bundle components and point at the output directory. Bundling a directory discovers shared dependencies, produces a shared runtime module, and thin per-component ES modules.
 
 ```bash
 golit bundle node_modules/@rhds/elements/elements/ --out bundles/
@@ -110,11 +110,11 @@ golit transform public/ --defs bundles/
 
 ### CDN Import Maps vs Local Resolution
 
-golit needs **local files on disk** to bundle components for SSR. If your HTML import map uses CDN URLs (common for production browser delivery), golit cannot resolve those to local source files.
+golit needs **local files on disk** to bundle components for SSR. If your HTML import map uses CDN URLs (common for production browser delivery), golit cannot resolve them to local source files.
 
 **Two approaches:**
 
-1. **Pre-bundle (recommended for CI/CD):** Use `golit bundle <src-dir/> --out <dir/>` to pre-bundle from `node_modules/` directly. Then use `--defs <dir/>` at transform time. The import map in your HTML is irrelevant to golit — esbuild resolves everything from `node_modules/`.
+1. **Pre-bundle (recommended for CI/CD):** Use `golit bundle <src-dir/> --out <dir/>` to pre-bundle from `node_modules/` directly. Then use `--defs <dir/>` at transform time. The import map in your HTML is irrelevant to golit. esbuild resolves everything from `node_modules/`.
 
 2. **Local import map (for auto-discovery):** Keep the CDN import map in your HTML for the browser, but provide a separate local import map via `--importmap` (or `importmap:` in golit.yaml) that maps the same specifiers to `node_modules/` paths:
 
@@ -149,7 +149,7 @@ No special Hugo module or shortcode is needed. Write your HTML templates with cu
 hugo build && golit transform public/
 ```
 
-If your import map uses paths relative to the site root, golit resolves them automatically. For more control, pass an import map via CLI:
+If your import map uses paths relative to the site root, golit resolves them. For more control, pass an import map via CLI:
 
 ```bash
 hugo build && golit transform public/ --importmap importmap.json
@@ -170,7 +170,7 @@ make serve
 make serve-auto
 ```
 
-Both produce fully server-side rendered web components at `http://localhost:8080`. The auto-discovery path uses a local import map (`importmap.local.json`) to resolve CDN specifiers to `node_modules/` for SSR bundling.
+Both produce server-side rendered web components at `http://localhost:8080`. The auto-discovery path uses a local import map (`importmap.local.json`) to resolve CDN specifiers to `node_modules/` for SSR bundling.
 
 For authoring content without SSR (faster iteration with Hugo's live-reload dev server):
 
@@ -325,7 +325,7 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 Pre-bundle Lit components for SSR. All output uses the `.golit.module.js` format, consumable via `--defs`.
 
-- **Directory:** automatically discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) plus thin per-component `.golit.module.js` files that import from it.
+- **Directory:** discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) plus thin per-component `.golit.module.js` files that import from it.
 - **Single file:** produces a self-contained `.golit.module.js` (no shared runtime needed for one component).
 
 ```bash
@@ -341,7 +341,7 @@ Options:
 - `--conditions <val>` -- Export conditions, comma-separated (default: `browser`)
 - `--main-fields <val>` -- package.json fields, comma-separated (default: `module,main`)
 
-The directory build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
+The directory build discovers dependencies from the actual import graph. The shared runtime loads once per QJS engine instance. Each component module contains only its own code and imports, avoiding duplicate classes and decorator state across components.
 
 ### `golit render`
 
@@ -359,14 +359,14 @@ golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
 cat page.html | golit render --defs bundles/
 ```
 
-When no HTML fragment argument is provided and stdin is a pipe, the fragment is read from stdin. This is useful for large HTML payloads that would exceed OS argument length limits.
+With no HTML argument and a piped stdin, golit reads the fragment from stdin. Use this for large HTML payloads that would exceed OS argument length limits.
 
 Options:
 - `--quiet` / `-q` -- Suppress warnings (unregistered elements, render failures)
 
 ### `golit serve`
 
-Run a long-lived server that holds a warm engine pool and transforms full HTML documents on each request. Intended for middleware integration (PHP, Ruby, etc.); avoids per-request **`golit transform`** process startup.
+Run a long-lived server with a warm engine pool. Transforms full HTML documents on each request, avoiding per-request **`golit transform`** process startup. Built for middleware integration (PHP, Ruby, etc.).
 
 Two transport modes are available:
 
@@ -387,7 +387,7 @@ golit serve --defs bundles/ --stdio
 
 Uses a NUL-delimited (`\0`) stdin/stdout protocol instead of HTTP. Write HTML terminated by `\0` to stdin, read rendered HTML terminated by `\0` from stdout. The process stays alive across requests with the same warm engine pool.
 
-Stdio mode is useful when the caller is on the same machine and HTTP overhead is unnecessary. Pipe liveness is implicit (broken pipe = process died), so no `/health` endpoint is needed. `--stdio` and `--listen` are mutually exclusive.
+Stdio mode works well when the caller runs on the same machine. Pipe liveness is implicit (broken pipe = process died), so no `/health` endpoint is needed. `--stdio` and `--listen` are mutually exclusive.
 
 Options: `--quiet` / `-q` suppresses warnings on both modes.
 
@@ -522,10 +522,10 @@ Changes that don't warrant a release (docs, CI tweaks, refactoring with no publi
 
 ### Releasing
 
-Releases are fully automated via GitHub Actions:
+Releases are automated via GitHub Actions:
 
 1. When PRs with changeset files are merged to `main`, the `prepare-release` workflow consumes changesets, bumps the version in `cmd/golit/version.go`, updates `CHANGELOG.md`, and opens (or updates) a `release/next` PR.
-2. When you merge the release PR, the `release` workflow automatically:
+2. When you merge the release PR, the `release` workflow:
    - Cross-compiles binaries for Linux, macOS, and Windows (amd64 + arm64)
    - Packages archives with third-party licenses and SHA-256 checksums
    - Creates a GitHub Release with all artifacts
