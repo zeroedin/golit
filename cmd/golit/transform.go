@@ -71,6 +71,9 @@ func runTransform(args []string) error {
 		case "--verbose", "-v":
 			cliOpts.Verbose = true
 			i++
+		case "--quiet", "-q":
+			cliOpts.Quiet = true
+			i++
 		case "--dry-run":
 			cliOpts.DryRun = true
 			i++

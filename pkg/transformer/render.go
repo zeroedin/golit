@@ -13,23 +13,25 @@ import (
 	"github.com/zeroedin/golit/pkg/jsengine"
 )
 
-// RenderHTML takes an HTML string, finds custom elements, and returns
-// the transformed HTML with Declarative Shadow DOM.
-func RenderHTML(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
-	var ign map[string]bool
-	if len(ignored) > 0 {
-		ign = ignored[0]
-	}
-	return renderHTMLWithIgnored(input, registry, ign)
+// RenderOpts configures optional behavior for RenderHTML and RenderFragment.
+type RenderOpts struct {
+	Ignored map[string]bool
+	Quiet   bool
 }
 
-func renderHTMLWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+// RenderHTML takes an HTML string, finds custom elements, and returns
+// the transformed HTML with Declarative Shadow DOM.
+func RenderHTML(input string, registry *jsengine.Registry, opts ...RenderOpts) (string, error) {
+	var o RenderOpts
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	engine, err := jsengine.NewEngine()
 	if err != nil {
 		return "", fmt.Errorf("creating JS engine: %w", err)
 	}
 	defer engine.Close()
-	return RenderHTMLWithEngine(input, engine, registry, ignored)
+	return RenderHTMLWithEngine(input, engine, registry, o.Ignored, o.Quiet)
 }
 
 // transformContext carries shared state through the recursive transform walk.
@@ -38,14 +40,18 @@ type transformContext struct {
 	registry     *jsengine.Registry
 	ignored      map[string]bool
 	file         string // current HTML file path (for error reporting)
+	quiet        bool
 	renderErrors []RenderError
 }
 
 // RenderHTMLWithEngine transforms HTML using a caller-provided engine,
 // avoiding engine creation overhead. Use this when you have a long-lived
 // engine (e.g. in a Renderer).
-func RenderHTMLWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+func RenderHTMLWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool, quiet ...bool) (string, error) {
 	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
+	if len(quiet) > 0 {
+		ctx.quiet = quiet[0]
+	}
 	output, err := renderHTMLWithContext(input, ctx)
 	return output, err
 }
@@ -86,26 +92,22 @@ func renderHTMLWithContext(input string, ctx *transformContext) (string, error) 
 }
 
 // RenderFragment renders an HTML fragment.
-func RenderFragment(input string, registry *jsengine.Registry, ignored ...map[string]bool) (string, error) {
-	var ign map[string]bool
-	if len(ignored) > 0 {
-		ign = ignored[0]
+func RenderFragment(input string, registry *jsengine.Registry, opts ...RenderOpts) (string, error) {
+	var o RenderOpts
+	if len(opts) > 0 {
+		o = opts[0]
 	}
-	return renderFragmentWithIgnored(input, registry, ign)
-}
-
-func renderFragmentWithIgnored(input string, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
 	engine, err := jsengine.NewEngine()
 	if err != nil {
 		return "", fmt.Errorf("creating JS engine: %w", err)
 	}
 	defer engine.Close()
-	return RenderFragmentWithEngine(input, engine, registry, ignored)
+	return RenderFragmentWithEngine(input, engine, registry, o.Ignored, o.Quiet)
 }
 
 // RenderFragmentWithEngine renders an HTML fragment using a caller-provided
 // engine, avoiding engine creation overhead.
-func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool) (string, error) {
+func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *jsengine.Registry, ignored map[string]bool, quiet ...bool) (string, error) {
 	nodes, err := html.ParseFragment(strings.NewReader(input), &html.Node{
 		Type: html.ElementNode, Data: "body", DataAtom: atom.Body,
 	})
@@ -114,6 +116,9 @@ func RenderFragmentWithEngine(input string, engine ElementRenderer, registry *js
 	}
 
 	ctx := &transformContext{engine: engine, registry: registry, ignored: ignored}
+	if len(quiet) > 0 {
+		ctx.quiet = quiet[0]
+	}
 
 	wrapper := &html.Node{Type: html.ElementNode, Data: "body", DataAtom: atom.Body}
 	for _, node := range nodes {
@@ -158,6 +163,9 @@ func collectUnexpanded(node *html.Node, ctx *transformContext) []pendingElement 
 				if loaded || ctx.engine.IsRegistered(n.Data) {
 					pending = append(pending, pendingElement{node: n, depth: depth})
 					return
+				}
+				if !ctx.quiet && !ctx.registry.IsUnregistered(n.Data) {
+					fmt.Fprintf(os.Stderr, "golit: warning: no bundle for <%s>, passing through unchanged\n", n.Data)
 				}
 				ctx.registry.MarkUnregistered(n.Data)
 			}
@@ -217,6 +225,9 @@ func renderHTMLBatched(doc *html.Node, ctx *transformContext, maxDepth int) erro
 					File:    ctx.file,
 					Err:     errors.New(r.Error),
 				})
+				if !ctx.quiet {
+					fmt.Fprintf(os.Stderr, "golit: warning: render failed for <%s>: %s, passing through unchanged\n", p.node.Data, r.Error)
+				}
 				continue
 			}
 

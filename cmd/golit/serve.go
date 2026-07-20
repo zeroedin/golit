@@ -27,6 +27,7 @@ func runServe(args []string) error {
 		listen      = "127.0.0.1:9777"
 		listenFlag  bool
 		stdioMode   bool
+		quiet       bool
 		ignored     []string
 		preload     []string
 		concurrency int
@@ -67,6 +68,8 @@ func runServe(args []string) error {
 			i++
 		case "--stdio":
 			stdioMode = true
+		case "--quiet", "-q":
+			quiet = true
 		case "--concurrency", "-j":
 			if i+1 < len(args) {
 				if n, err := strconv.Atoi(args[i+1]); err == nil {
@@ -141,7 +144,7 @@ func runServe(args []string) error {
 	fmt.Fprintf(os.Stderr, "golit serve: initialized %d engine workers\n", concurrency)
 
 	if stdioMode {
-		return runStdio(os.Stdin, os.Stdout, pool, registry, ignoredMap)
+		return runStdio(os.Stdin, os.Stdout, pool, registry, ignoredMap, quiet)
 	}
 
 	const maxBody = 32 << 20 // 32 MiB
@@ -175,7 +178,7 @@ func runServe(args []string) error {
 		start := time.Now()
 		engine := pool.Get()
 		active := pool.Size() - pool.Available()
-		out, err := transformer.RenderHTMLWithEngine(string(body), engine, registry, ignoredMap)
+		out, err := transformer.RenderHTMLWithEngine(string(body), engine, registry, ignoredMap, quiet)
 		pool.Put(engine)
 		dur := time.Since(start)
 
