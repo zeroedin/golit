@@ -1,3 +1,7 @@
+## v0.1.1 (2026-07-20)
+
+- Remove TypeScript support from golit bundle. golit is a post-build tool that accepts compiled JavaScript from node_modules/, not TypeScript source. The directory walker no longer collects .ts/.tsx files, and the inline BundleSource loader uses LoaderJS instead of LoaderTS.
+
 ## v0.1.0 (2026-07-20)
 
 - Initial minor release consolidating all features since first commit.
