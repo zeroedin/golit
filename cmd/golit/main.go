@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	golit bundle <source.ts|js> [--out <file>] [--minify] [--target es2022] [--platform neutral]
+//	golit bundle <source.js> [--out <file>] [--minify] [--target es2022] [--platform neutral]
 //	golit transform <html-dir> --defs <bundles-dir> [--out <dir>] [--verbose]
 //	golit render --defs <bundles-dir> '<html-fragment>'
 //	echo '<html>' | golit render --defs <bundles-dir>
@@ -63,7 +63,7 @@ func printUsage() {
 	fmt.Fprintf(os.Stderr, `golit - Lit SSR in pure Go (QJS engine)
 
 Usage:
-  golit bundle <source.ts|js> [--out <file.golit.module.js>] [options]
+  golit bundle <source.js> [--out <file.golit.module.js>] [options]
   golit bundle <src-dir/> [--out <modules-dir/>] [options]
   golit compile --defs <bundles-dir> [--out <file.golit.compiled.js>] [--minify]
   golit transform <html-dir> [--defs <dir>] [--compiled <file>] [--sources <dir>] [--importmap <file>] [--out <dir>]
@@ -90,7 +90,7 @@ Options:
   --out <path>       Output path for bundle/transform
   --defs <dir>       Directory containing pre-bundled .golit.bundle.js files
   --compiled <file>  Single pre-compiled .golit.compiled.js artifact
-  --sources <dir>    Directory of component .js/.ts source files (auto-bundles)
+  --sources <dir>    Directory of component .js source files (auto-bundles)
   --importmap <file> Import map JSON file for resolving bare-module specifiers
   --ignore <tag>     Skip SSR for this custom element (repeatable)
   --quiet, -q        Suppress warnings (unregistered elements, render failures)

@@ -1,16 +1,11 @@
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
 
-@customElement('my-card')
-export class MyCard extends LitElement {
-  @property({ type: String })
-  title: string = 'Untitled';
-
-  @property({ type: String })
-  subtitle?: string;
-
-  @property({ type: Number })
-  count: number = 0;
+class MyCard extends LitElement {
+  static properties = {
+    title: { type: String },
+    subtitle: { type: String },
+    count: { type: Number },
+  };
 
   static styles = css`
     :host {
@@ -24,12 +19,21 @@ export class MyCard extends LitElement {
     .count { font-weight: bold; }
   `;
 
+  constructor() {
+    super();
+    this.title = 'Untitled';
+    this.subtitle = '';
+    this.count = 0;
+  }
+
   render() {
     return html`
       <h2>${this.title}</h2>
-      <p class="subtitle">${this.subtitle ?? ''}</p>
+      <p class="subtitle">${this.subtitle}</p>
       <p class="count">Count: ${this.count}</p>
       <slot></slot>
     `;
   }
 }
+
+customElements.define('my-card', MyCard);

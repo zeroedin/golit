@@ -142,11 +142,11 @@ func bundleDirWithModules(srcDir, outDir string, opts jsengine.BundleOptions) er
 			return nil
 		}
 		name := d.Name()
-		if strings.HasSuffix(name, ".d.ts") || strings.HasSuffix(name, ".golit.bundle.js") || strings.HasSuffix(name, ".golit.module.js") {
+		if strings.HasSuffix(name, ".golit.bundle.js") || strings.HasSuffix(name, ".golit.module.js") {
 			return nil
 		}
 		ext := filepath.Ext(name)
-		if ext != ".js" && ext != ".ts" && ext != ".tsx" {
+		if ext != ".js" {
 			return nil
 		}
 		paths = append(paths, path)

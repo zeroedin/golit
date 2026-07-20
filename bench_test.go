@@ -19,7 +19,7 @@ func setupBenchBundles(b *testing.B) string {
 
 	for _, src := range []string{
 		"testdata/sources/my-greeting.js",
-		"testdata/sources/my-card.ts",
+		"testdata/sources/my-card.js",
 	} {
 		bundle, err := jsengine.BundleComponent(src)
 		if err != nil {

@@ -262,7 +262,7 @@ func TestBundleComponent_MyGreeting(t *testing.T) {
 }
 
 func TestBundleComponent_MyCard(t *testing.T) {
-	bundle, err := BundleComponent("../../testdata/sources/my-card.ts")
+	bundle, err := BundleComponent("../../testdata/sources/my-card.js")
 	if err != nil {
 		t.Fatalf("bundling: %v", err)
 	}

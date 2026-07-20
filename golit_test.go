@@ -15,7 +15,7 @@ func setupRendererBundles(t *testing.T) string {
 
 	sources := []string{
 		"testdata/sources/my-greeting.js",
-		"testdata/sources/my-card.ts",
+		"testdata/sources/my-card.js",
 	}
 
 	nodePaths := jsengine.FindAllNodeModules(sources[0])

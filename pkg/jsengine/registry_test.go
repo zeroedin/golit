@@ -107,15 +107,15 @@ func TestDiscoverTagNameFast_RealBundle(t *testing.T) {
 	}
 }
 
-func TestDiscoverTagNameFast_DecoratorBundle(t *testing.T) {
-	bundle, err := BundleComponent("../../testdata/sources/my-card.ts")
+func TestDiscoverTagNameFast_MyCardBundle(t *testing.T) {
+	bundle, err := BundleComponent("../../testdata/sources/my-card.js")
 	if err != nil {
 		t.Fatalf("bundling my-card: %v", err)
 	}
 
 	tag, ok := discoverTagNameFast(bundle)
 	if !ok {
-		t.Fatal("expected to find tag name in decorator bundle via __decorateClass pattern")
+		t.Fatal("expected to find tag name in my-card bundle")
 	}
 	if tag != "my-card" {
 		t.Errorf("tag = %q, want %q", tag, "my-card")
