@@ -323,7 +323,7 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Take component source files from `node_modules/` and produce self-contained JavaScript modules that golit can execute for SSR. The bundler resolves all imports (Lit, decorators, CSS, dependencies), compiles TypeScript, and outputs `.golit.module.js` files ready for `--defs`.
+Take component source files from `node_modules/` and produce self-contained JavaScript modules that golit can execute for SSR. The bundler resolves all imports (Lit, decorators, CSS, dependencies) and outputs `.golit.module.js` files ready for `--defs`.
 
 You can bundle a single component or an entire directory of components:
 
