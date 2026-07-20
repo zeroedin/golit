@@ -63,3 +63,29 @@ func TestSharedRenderCache_ConcurrentAccess(t *testing.T) {
 		t.Error("expected some entries after concurrent writes")
 	}
 }
+
+func TestSharedRenderCache_MaxEntries(t *testing.T) {
+	c := newSharedRenderCache()
+	c.maxEntries = 3
+
+	c.set("a", renderCacheEntry{html: "a"})
+	c.set("b", renderCacheEntry{html: "b"})
+	c.set("c", renderCacheEntry{html: "c"})
+
+	if c.len() != 3 {
+		t.Fatalf("Len = %d, want 3", c.len())
+	}
+
+	c.set("d", renderCacheEntry{html: "d"})
+	if c.len() != 3 {
+		t.Fatalf("Len after cap = %d, want 3 (should not grow)", c.len())
+	}
+	if _, ok := c.get("d"); ok {
+		t.Error("entry beyond cap should not be stored")
+	}
+
+	// Existing entries still accessible.
+	if _, ok := c.get("a"); !ok {
+		t.Error("existing entry should still be accessible after cap")
+	}
+}
