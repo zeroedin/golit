@@ -102,6 +102,8 @@ jobs:
             --notes-file /tmp/release-notes.md
 
       - name: Update Homebrew tap
+        if: secrets.HOMEBREW_TAP_TOKEN != ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
