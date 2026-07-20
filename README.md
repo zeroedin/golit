@@ -34,9 +34,20 @@ The browser still uses your CDN import map at runtime for hydration. golit only 
 
 ### Install
 
+**Homebrew** (macOS and Linux):
+
+```bash
+brew tap zeroedin/golit
+brew install golit
+```
+
+**Go install**:
+
 ```bash
 go install github.com/zeroedin/golit/cmd/golit@latest
 ```
+
+**Binary downloads**: grab a pre-built binary from the [releases page](https://github.com/zeroedin/golit/releases).
 
 ### The simplest workflow (zero config)
 
