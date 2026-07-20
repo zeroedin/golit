@@ -104,7 +104,7 @@ jobs:
       - name: Update Homebrew tap
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_GOLIT_TAP_TOKEN }}
         run: |
           gh workflow run update-formula.yml \
             --repo zeroedin/homebrew-golit \
