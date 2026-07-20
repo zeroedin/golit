@@ -1,6 +1,8 @@
 package jsengine
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -119,7 +121,11 @@ func TestExtractPackageName(t *testing.T) {
 func TestResolveModulePath_SubpathSpecifier(t *testing.T) {
 	// This test requires node_modules to exist. Use the hugo-rhds example
 	// if available, otherwise skip.
-	nmDir := FindNodeModules("../../examples/hugo-rhds/dummy")
+	nmDirs := FindAllNodeModules("../../examples/hugo-rhds/dummy")
+	var nmDir string
+	if len(nmDirs) > 0 {
+		nmDir = nmDirs[0]
+	}
 	if nmDir == "" {
 		t.Skip("node_modules not found in hugo-rhds example")
 	}
@@ -141,10 +147,80 @@ func TestResolveModulePath_SubpathSpecifier(t *testing.T) {
 	}
 }
 
+func TestFindAllNodeModules_NestedDirs(t *testing.T) {
+	root := t.TempDir()
+
+	// Simulate:
+	//   root/node_modules/@shoelace-style/localize/
+	//   root/node_modules/@awesome.me/webawesome/node_modules/@ctrl/tinycolor/
+	//   root/node_modules/@awesome.me/webawesome/dist/components/button/button.js
+	nested := filepath.Join(root, "node_modules", "@awesome.me", "webawesome", "node_modules", "@ctrl", "tinycolor")
+	if err := os.MkdirAll(nested, 0755); err != nil {
+		t.Fatal(err)
+	}
+	localize := filepath.Join(root, "node_modules", "@shoelace-style", "localize")
+	if err := os.MkdirAll(localize, 0755); err != nil {
+		t.Fatal(err)
+	}
+	buttonDir := filepath.Join(root, "node_modules", "@awesome.me", "webawesome", "dist", "components", "button")
+	if err := os.MkdirAll(buttonDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	buttonFile := filepath.Join(buttonDir, "button.js")
+	if err := os.WriteFile(buttonFile, []byte("// button"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := findAllNodeModules(buttonFile)
+
+	if len(dirs) != 2 {
+		t.Fatalf("expected 2 node_modules dirs, got %d: %v", len(dirs), dirs)
+	}
+
+	// First should be the nested one (closer to the source file)
+	expectedNested := filepath.Join(root, "node_modules", "@awesome.me", "webawesome", "node_modules")
+	expectedRoot := filepath.Join(root, "node_modules")
+
+	if dirs[0] != expectedNested {
+		t.Errorf("first dir = %q, want %q", dirs[0], expectedNested)
+	}
+	if dirs[1] != expectedRoot {
+		t.Errorf("second dir = %q, want %q", dirs[1], expectedRoot)
+	}
+}
+
+func TestFindAllNodeModules_SingleDir(t *testing.T) {
+	root := t.TempDir()
+	nm := filepath.Join(root, "node_modules")
+	if err := os.MkdirAll(nm, 0755); err != nil {
+		t.Fatal(err)
+	}
+	srcDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	dirs := findAllNodeModules(filepath.Join(srcDir, "app.js"))
+	if len(dirs) != 1 {
+		t.Fatalf("expected 1 node_modules dir, got %d: %v", len(dirs), dirs)
+	}
+	if dirs[0] != nm {
+		t.Errorf("dir = %q, want %q", dirs[0], nm)
+	}
+}
+
+func TestFindAllNodeModules_NoDirs(t *testing.T) {
+	root := t.TempDir()
+	dirs := findAllNodeModules(filepath.Join(root, "dummy"))
+	if len(dirs) != 0 {
+		t.Fatalf("expected 0 node_modules dirs, got %d: %v", len(dirs), dirs)
+	}
+}
+
 func TestDiscoverExternalPackages_NonFatalErrors(t *testing.T) {
 	// DiscoverExternalPackages with no valid entry points should return nil, nil
 	// (not an error) since there's nothing to discover.
-	result, err := DiscoverExternalPackages(nil, "")
+	result, err := DiscoverExternalPackages(nil, nil)
 	if err != nil {
 		t.Fatalf("expected nil error for empty input, got: %v", err)
 	}
@@ -153,7 +229,7 @@ func TestDiscoverExternalPackages_NonFatalErrors(t *testing.T) {
 	}
 
 	// With non-existent paths, should also return nil, nil (paths are filtered out)
-	result, err = DiscoverExternalPackages([]string{"/nonexistent/path.js"}, "/nonexistent")
+	result, err = DiscoverExternalPackages([]string{"/nonexistent/path.js"}, []string{"/nonexistent"})
 	if err != nil {
 		t.Fatalf("expected nil error for non-existent paths, got: %v", err)
 	}

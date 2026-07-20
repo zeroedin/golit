@@ -128,9 +128,9 @@ func buildDiscoveredModules(paths []string, registry *jsengine.Registry, verbose
 	}
 	paths = unique
 
-	nodeModulesDir := jsengine.FindNodeModules(paths[0])
+	nodePaths := jsengine.FindAllNodeModules(paths[0])
 
-	externals, err := jsengine.DiscoverExternalPackages(paths, nodeModulesDir)
+	externals, err := jsengine.DiscoverExternalPackages(paths, nodePaths)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "  golit: warning: external discovery failed: %v\n", err)
 		return
@@ -144,8 +144,8 @@ func buildDiscoveredModules(paths []string, registry *jsengine.Registry, verbose
 		return
 	}
 
-	if registry.SharedRuntime() == "" && nodeModulesDir != "" {
-		rt, rtErr := jsengine.BundleSharedRuntime(nodeModulesDir, modules)
+	if registry.SharedRuntime() == "" && len(nodePaths) > 0 {
+		rt, rtErr := jsengine.BundleSharedRuntime(nodePaths, modules)
 		if rtErr != nil {
 			fmt.Fprintf(os.Stderr, "  golit: warning: shared runtime build failed: %v\n", rtErr)
 		} else {
