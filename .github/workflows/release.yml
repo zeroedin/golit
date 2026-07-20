@@ -92,14 +92,27 @@ jobs:
           rm -rf LICENSE THIRD_PARTY_LICENSES
           sha256sum * > checksums.txt
 
+      - name: Create or update tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          TAG="v${VERSION}"
+          git tag -f "$TAG"
+          git push origin "$TAG" --force
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "v${VERSION}" dist/* \
-            --title "v${VERSION}" \
-            --notes-file /tmp/release-notes.md
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "$TAG" \
+              --notes-file /tmp/release-notes.md
+          fi
 
       - name: Update Homebrew tap
         continue-on-error: true
