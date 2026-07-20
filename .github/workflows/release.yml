@@ -1,94 +1,107 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   release:
-    name: Release
+    if: github.head_ref == 'release/next' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-go@v5
         with:
-          node-version: '20'
+          go-version-file: go.mod
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Create Release Pull Request or Publish
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          commit: "chore: prepare release"
-          title: "chore: prepare release"
-          version: npx changeset version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Go
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.mod'
-
-      - name: Extract version
-        if: steps.changesets.outputs.hasChangesets == 'false'
+      - name: Get version
         id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(grep -oP 'Version\s*=\s*"\K[0-9]+\.[0-9]+\.[0-9]+' cmd/golit/version.go)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Detected version: $VERSION"
 
-      - name: Check if tag exists
-        if: steps.changesets.outputs.hasChangesets == 'false'
-        id: tag_check
+      - name: Extract release notes
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag $TAG already exists, skipping release"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "Tag $TAG does not exist, proceeding with release"
-          fi
+          awk '/^## /{if(n++)exit}n' CHANGELOG.md > /tmp/release-notes.md
 
-      - name: Create and push tag
-        if: steps.changesets.outputs.hasChangesets == 'false' && steps.tag_check.outputs.exists == 'false'
+      - name: Cross-compile
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          git tag "$TAG"
-          git push origin "$TAG"
+          set -euo pipefail
+          mkdir -p dist
 
-      - name: Build all platforms
-        if: steps.changesets.outputs.hasChangesets == 'false' && steps.tag_check.outputs.exists == 'false'
-        run: make cross-compile
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          TARGETS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+            "windows/arm64"
+          )
 
-      - name: Create checksums
-        if: steps.changesets.outputs.hasChangesets == 'false' && steps.tag_check.outputs.exists == 'false'
+          for target in "${TARGETS[@]}"; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            OUTPUT="dist/golit-${GOOS}-${GOARCH}"
+            [ "$GOOS" = "windows" ] && OUTPUT="${OUTPUT}.exe"
+
+            echo "Building ${GOOS}/${GOARCH}..."
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -ldflags="$LDFLAGS" -o "$OUTPUT" ./cmd/golit/
+          done
+
+      - name: Collect third-party licenses
         run: |
+          go install github.com/google/go-licenses@latest
+          go-licenses save ./... --save_path=dist/THIRD_PARTY_LICENSES
+          cp LICENSE dist/LICENSE
+
+      - name: Package archives
+        run: |
+          set -euo pipefail
           cd dist
+
+          for bin in golit-*; do
+            [ ! -f "$bin" ] && continue
+            name="${bin%.exe}"
+
+            case "$bin" in
+              *.exe)
+                zip -r "${name}.zip" "$bin" LICENSE THIRD_PARTY_LICENSES
+                rm "$bin"
+                ;;
+              *)
+                tar czf "${name}.tar.gz" "$bin" LICENSE THIRD_PARTY_LICENSES
+                rm "$bin"
+                ;;
+            esac
+          done
+
+          rm -rf LICENSE THIRD_PARTY_LICENSES
           sha256sum * > checksums.txt
-          cat checksums.txt
 
       - name: Create GitHub Release
-        if: steps.changesets.outputs.hasChangesets == 'false' && steps.tag_check.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
-          files: |
-            dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" dist/* \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release-notes.md
+
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          gh workflow run update-formula.yml \
+            --repo zeroedin/homebrew-golit \
+            --field version="${{ steps.version.outputs.version }}"
