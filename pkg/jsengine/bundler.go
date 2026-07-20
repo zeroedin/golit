@@ -478,7 +478,7 @@ func BundleSource(source string, opts ...BundleOptions) (string, error) {
 		Stdin: &api.StdinOptions{
 			Contents:   source,
 			ResolveDir: cwd,
-			Loader:     api.LoaderTS,
+			Loader:     api.LoaderJS,
 		},
 		Bundle:           true,
 		Format:           opt.Format,

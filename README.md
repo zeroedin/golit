@@ -311,7 +311,7 @@ golit transform <html-dir> [options]
 
 Options:
 - `--defs <dir>` -- Directory of pre-bundled `.golit.module.js` files (and `_runtime.golit.module.js`)
-- `--sources <dir>` -- Directory of component `.js`/`.ts` source files (auto-bundles)
+- `--sources <dir>` -- Directory of component `.js` source files (auto-bundles)
 - `--importmap <file>` -- Import map JSON file for resolving bare-module specifiers
 - `--out <dir>` -- Output to a separate directory (default: in-place)
 - `--quiet` / `-q` -- Suppress warnings (unregistered elements, render failures)
@@ -328,7 +328,7 @@ Take component source files from `node_modules/` and produce self-contained Java
 You can bundle a single component or an entire directory of components:
 
 ```bash
-golit bundle <source.ts|js> [--out <file.golit.module.js>] [options]
+golit bundle <source.js> [--out <file.golit.module.js>] [options]
 golit bundle <src-dir/> [--out <modules-dir/>] [options]
 ```
 
@@ -339,7 +339,7 @@ golit bundle node_modules/@awesome.me/webawesome/dist/components/button/button.j
   --out bundles/wa-button.golit.module.js
 ```
 
-**Directory** mode scans all `.js`/`.ts` files in the directory, figures out which dependencies they share (Lit, reactive-element, etc.), and splits the output into:
+**Directory** mode scans all `.js` files in the directory, figures out which dependencies they share (Lit, reactive-element, etc.), and splits the output into:
 - `_runtime.golit.module.js` containing all shared code (loaded once)
 - One thin `.golit.module.js` per component (imports from the shared runtime)
 
@@ -528,7 +528,7 @@ pkg/transformer/        HTML file walker, component discovery, DSD expansion
 
 ## Dependencies
 
-- `github.com/evanw/esbuild` -- TypeScript/JavaScript bundler (Go-native)
+- `github.com/evanw/esbuild` -- JavaScript bundler (Go-native)
 - `github.com/fastschema/qjs` -- QuickJS via WebAssembly (pure Go, no CGo)
 - `golang.org/x/net/html` -- HTML5 parser
 
