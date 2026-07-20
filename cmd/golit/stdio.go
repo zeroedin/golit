@@ -14,7 +14,7 @@ import (
 	"github.com/zeroedin/golit/pkg/transformer"
 )
 
-func runStdio(stdin io.Reader, stdout io.Writer, pool *jsengine.EnginePool, registry *jsengine.Registry, ignored map[string]bool) error {
+func runStdio(stdin io.Reader, stdout io.Writer, pool *jsengine.EnginePool, registry *jsengine.Registry, ignored map[string]bool, quiet bool) error {
 	fmt.Fprintf(os.Stderr, "golit serve: stdio mode, reading NUL-delimited requests from stdin\n")
 
 	sigCh := make(chan os.Signal, 1)
@@ -46,7 +46,7 @@ func runStdio(stdin io.Reader, stdout io.Writer, pool *jsengine.EnginePool, regi
 					input := strings.TrimSuffix(result.data, "\x00")
 					if input != "" {
 						engine := pool.Get()
-						out, renderErr := transformer.RenderHTMLWithEngine(input, engine, registry, ignored)
+						out, renderErr := transformer.RenderHTMLWithEngine(input, engine, registry, ignored, quiet)
 						pool.Put(engine)
 						if renderErr != nil {
 							fmt.Fprintf(os.Stderr, "golit serve: render error: %v\n", renderErr)
@@ -81,7 +81,7 @@ func runStdio(stdin io.Reader, stdout io.Writer, pool *jsengine.EnginePool, regi
 
 			start := time.Now()
 			engine := pool.Get()
-			out, renderErr := transformer.RenderHTMLWithEngine(input, engine, registry, ignored)
+			out, renderErr := transformer.RenderHTMLWithEngine(input, engine, registry, ignored, quiet)
 			pool.Put(engine)
 			dur := time.Since(start)
 

@@ -97,6 +97,7 @@ Options:
   --sources <dir>    Directory of component .js/.ts source files (auto-bundles)
   --importmap <file> Import map JSON file for resolving bare-module specifiers
   --ignore <tag>     Skip SSR for this custom element (repeatable)
+  --quiet, -q        Suppress warnings (unregistered elements, render failures)
   --minify           Minify the output bundle
   --target <val>     ES target (esnext, es2015-es2024; default: es2022)
   --format <val>     Output format (esm, cjs, iife; default: esm)

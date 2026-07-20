@@ -13,6 +13,7 @@ import (
 func runRender(args []string) error {
 	var defsDir, inputHTML string
 	var componentSources []string
+	var quiet bool
 
 	i := 0
 	for i < len(args) {
@@ -29,6 +30,9 @@ func runRender(args []string) error {
 			}
 			componentSources = append(componentSources, args[i+1])
 			i += 2
+		case "--quiet", "-q":
+			quiet = true
+			i++
 		default:
 			if strings.HasPrefix(args[i], "--") {
 				return fmt.Errorf("unknown option: %s", args[i])
@@ -86,7 +90,7 @@ func runRender(args []string) error {
 		fmt.Fprintf(os.Stderr, "golit: registered <%s> from inline source\n", tagName)
 	}
 
-	output, err := transformer.RenderHTML(inputHTML, registry)
+	output, err := transformer.RenderHTML(inputHTML, registry, transformer.RenderOpts{Quiet: quiet})
 	if err != nil {
 		return fmt.Errorf("rendering: %w", err)
 	}

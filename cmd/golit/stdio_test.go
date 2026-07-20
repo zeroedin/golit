@@ -40,7 +40,7 @@ func TestRunStdio_SingleRequest(t *testing.T) {
 	stdin := strings.NewReader(input)
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestRunStdio_MultipleRequests(t *testing.T) {
 	stdin := strings.NewReader(input)
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestRunStdio_EmptyInput(t *testing.T) {
 	stdin := strings.NewReader("\x00")
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestRunStdio_EOF(t *testing.T) {
 	stdin := strings.NewReader("")
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio should return nil on EOF: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestRunStdio_PassthroughHTML(t *testing.T) {
 	stdin := strings.NewReader(input)
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestRunStdio_IgnoredTags(t *testing.T) {
 	stdin := strings.NewReader(input)
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, ignored)
+	err := runStdio(stdin, &stdout, pool, registry, ignored, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRunStdio_LargePayload(t *testing.T) {
 	stdin := strings.NewReader(sb.String())
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestRunStdio_FullDocument(t *testing.T) {
 	stdin := strings.NewReader(input)
 	var stdout bytes.Buffer
 
-	err := runStdio(stdin, &stdout, pool, registry, nil)
+	err := runStdio(stdin, &stdout, pool, registry, nil, false)
 	if err != nil {
 		t.Fatalf("runStdio: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestRunStdio_BrokenStdout(t *testing.T) {
 	stdin := strings.NewReader(input)
 	w := &brokenWriter{}
 
-	err := runStdio(stdin, w, pool, registry, nil)
+	err := runStdio(stdin, w, pool, registry, nil, false)
 	if err == nil {
 		t.Fatal("expected error on broken stdout")
 	}
@@ -242,7 +242,7 @@ func TestRunStdio_PoolReuse(t *testing.T) {
 	stdin := strings.NewReader(sb.String())
 	var stdout bytes.Buffer
 
-	if err := runStdio(stdin, &stdout, pool, registry, nil); err != nil {
+	if err := runStdio(stdin, &stdout, pool, registry, nil, false); err != nil {
 		t.Fatal(err)
 	}
 

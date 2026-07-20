@@ -348,6 +348,13 @@ func (r *Registry) MarkUnregistered(tagName string) {
 	r.mu.Unlock()
 }
 
+// IsUnregistered returns true if the tag has already been marked unregistered.
+func (r *Registry) IsUnregistered(tagName string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.unregistered[tagName]
+}
+
 // Unregistered returns all custom element tags that were encountered
 // but not in the registry.
 func (r *Registry) Unregistered() []string {

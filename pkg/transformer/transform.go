@@ -48,6 +48,10 @@ type Options struct {
 	// Verbose prints progress information to stderr.
 	Verbose bool
 
+	// Quiet suppresses warnings to stderr (e.g. unregistered elements,
+	// render failures). Only errors are emitted.
+	Quiet bool
+
 	// DryRun reads and transforms files but does not write them back.
 	DryRun bool
 
@@ -440,6 +444,7 @@ func renderFile(filePath string, srcDir string, registry *jsengine.Registry, eng
 		registry: registry,
 		ignored:  opts.Ignored,
 		file:     filePath,
+		quiet:    opts.Quiet,
 	}
 	output, err := renderHTMLWithContext(input, ctx)
 	if err != nil {
