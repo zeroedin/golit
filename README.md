@@ -323,14 +323,42 @@ When no discovery flags are provided, auto-discovery from HTML is used.
 
 ### `golit bundle`
 
-Pre-bundle Lit components for SSR. All output uses the `.golit.module.js` format, consumable via `--defs`.
+Take component source files from `node_modules/` and produce self-contained JavaScript modules that golit can execute for SSR. The bundler resolves all imports (Lit, decorators, CSS, dependencies), compiles TypeScript, and outputs `.golit.module.js` files ready for `--defs`.
 
-- **Directory:** discovers shared dependencies via esbuild Metafile analysis, produces a shared runtime module (`_runtime.golit.module.js`) plus thin per-component `.golit.module.js` files that import from it.
-- **Single file:** produces a self-contained `.golit.module.js` (no shared runtime needed for one component).
+You can bundle a single component or an entire directory of components:
 
 ```bash
-golit bundle <src-dir/> [--out <modules-dir/>] [options]
 golit bundle <source.ts|js> [--out <file.golit.module.js>] [options]
+golit bundle <src-dir/> [--out <modules-dir/>] [options]
+```
+
+**Single file** bundles everything into one `.golit.module.js`. Use this when you want to bundle one component at a time, or when bundling a third-party component like Web Awesome's `wa-button`:
+
+```bash
+golit bundle node_modules/@awesome.me/webawesome/dist/components/button/button.js \
+  --out bundles/wa-button.golit.module.js
+```
+
+**Directory** mode scans all `.js`/`.ts` files in the directory, figures out which dependencies they share (Lit, reactive-element, etc.), and splits the output into:
+- `_runtime.golit.module.js` containing all shared code (loaded once)
+- One thin `.golit.module.js` per component (imports from the shared runtime)
+
+This avoids duplicating Lit across 30 component bundles. The shared runtime loads once per QJS engine instance.
+
+```bash
+golit bundle node_modules/@rhds/elements/elements/ --out bundles/
+# produces: bundles/_runtime.golit.module.js
+#           bundles/rh-badge.golit.module.js
+#           bundles/rh-card.golit.module.js
+#           ...
+```
+
+Then use the output with any golit command:
+
+```bash
+golit transform public/ --defs bundles/
+golit render --defs bundles/ '<rh-badge state="success" number="7">7</rh-badge>'
+golit serve --defs bundles/
 ```
 
 Options:
@@ -340,8 +368,6 @@ Options:
 - `--platform <val>` -- Platform (`neutral`, `browser`, `node`; default: `neutral`)
 - `--conditions <val>` -- Export conditions, comma-separated (default: `browser`)
 - `--main-fields <val>` -- package.json fields, comma-separated (default: `module,main`)
-
-The directory build discovers dependencies from the actual import graph. The shared runtime loads once per QJS engine instance. Each component module contains only its own code and imports, avoiding duplicate classes and decorator state across components.
 
 ### `golit render`
 
