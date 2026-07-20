@@ -15,10 +15,6 @@ import (
 	"os"
 )
 
-// version is overridden at build time via ldflags -X main.version=...
-// The Makefile reads the canonical version from package.json (managed by changesets).
-// "dev" is the fallback for uninjected builds, e.g. `go run ./cmd/golit`.
-var version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -53,7 +49,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "version":
-		fmt.Printf("golit %s\n", version)
+		fmt.Printf("golit %s\n", Version)
 	case "help", "--help", "-h":
 		printUsage()
 	default:

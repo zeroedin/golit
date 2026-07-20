@@ -1,0 +1,66 @@
+name: Prepare Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changesets
+        id: check
+        run: |
+          COUNT=$(find .changeset -name '*.md' ! -iname 'README.md' ! -iname 'AGENTS.md' ! -iname 'CLAUDE.md' ! -iname 'GEMINI.md' 2>/dev/null | wc -l | tr -d ' ')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-go@v5
+        if: steps.check.outputs.count != '0'
+        with:
+          go-version-file: go.mod
+
+      - name: Prepare and publish release
+        if: steps.check.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B release/next
+
+          go run ./tools/changeset version
+
+          VERSION=$(cat /tmp/release-version.txt)
+
+          git add -A
+          git commit -m "chore: prepare release v${VERSION}"
+          git push origin release/next --force
+
+          {
+            echo "## v${VERSION}"
+            echo ""
+            cat /tmp/release-notes.md
+          } > /tmp/pr-body.md
+
+          EXISTING=$(gh pr list --head release/next --state open --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" \
+              --title "chore: prepare release v${VERSION}" \
+              --body-file /tmp/pr-body.md
+          else
+            gh pr create \
+              --base main \
+              --head release/next \
+              --title "chore: prepare release v${VERSION}" \
+              --body-file /tmp/pr-body.md
+          fi
