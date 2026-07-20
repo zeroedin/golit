@@ -16,7 +16,7 @@ Lit web components render empty shells until JavaScript loads. The official `@li
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - Component source files available **locally on disk** (installed via npm)
 
 golit bundles and executes component source code at build time using esbuild. This requires the component library and all of its dependencies to be installed locally -- typically via `npm install` in your project.
@@ -314,6 +314,7 @@ Options:
 - `--sources <dir>` -- Directory of component `.js`/`.ts` source files (auto-bundles)
 - `--importmap <file>` -- Import map JSON file for resolving bare-module specifiers
 - `--out <dir>` -- Output to a separate directory (default: in-place)
+- `--quiet` / `-q` -- Suppress warnings (unregistered elements, render failures)
 - `--verbose` -- Print progress to stderr
 - `--dry-run` -- Process without writing
 - `-j [N]` / `--concurrency [N]` -- Process files in parallel. `-j` alone uses all available CPUs; `-j 4` uses 4 workers. Default is sequential.
@@ -328,9 +329,17 @@ Pre-bundle Lit components for SSR. All output uses the `.golit.module.js` format
 - **Single file:** produces a self-contained `.golit.module.js` (no shared runtime needed for one component).
 
 ```bash
-golit bundle <src-dir/> [--out <modules-dir/>] [--minify]
-golit bundle <source.ts|js> [--out <file.golit.module.js>] [--minify]
+golit bundle <src-dir/> [--out <modules-dir/>] [options]
+golit bundle <source.ts|js> [--out <file.golit.module.js>] [options]
 ```
+
+Options:
+- `--minify` -- Minify the output
+- `--target <val>` -- ES target (`esnext`, `es2015`-`es2024`; default: `es2022`)
+- `--format <val>` -- Output format (`esm`, `cjs`, `iife`; default: `esm`)
+- `--platform <val>` -- Platform (`neutral`, `browser`, `node`; default: `neutral`)
+- `--conditions <val>` -- Export conditions, comma-separated (default: `browser`)
+- `--main-fields <val>` -- package.json fields, comma-separated (default: `module,main`)
 
 The directory build discovers dependencies from the actual import graph (no hardcoded package lists). The shared runtime is loaded once per QJS engine instance. Each component module contains only the component's own code and imports, avoiding duplicate classes and decorator state across components.
 
@@ -351,6 +360,9 @@ cat page.html | golit render --defs bundles/
 ```
 
 When no HTML fragment argument is provided and stdin is a pipe, the fragment is read from stdin. This is useful for large HTML payloads that would exceed OS argument length limits.
+
+Options:
+- `--quiet` / `-q` -- Suppress warnings (unregistered elements, render failures)
 
 ### `golit serve`
 
@@ -376,6 +388,8 @@ golit serve --defs bundles/ --stdio
 Uses a NUL-delimited (`\0`) stdin/stdout protocol instead of HTTP. Write HTML terminated by `\0` to stdin, read rendered HTML terminated by `\0` from stdout. The process stays alive across requests with the same warm engine pool.
 
 Stdio mode is useful when the caller is on the same machine and HTTP overhead is unnecessary. Pipe liveness is implicit (broken pipe = process died), so no `/health` endpoint is needed. `--stdio` and `--listen` are mutually exclusive.
+
+Options: `--quiet` / `-q` suppresses warnings on both modes.
 
 See [Middleware examples](#middleware-examples-php-and-ruby) for how the PHP/Ruby demos wire this up.
 
@@ -449,7 +463,7 @@ Instant paint -> Lit hydrates -> Interactive
 
 golit uses three key technologies:
 
-- **esbuild** (Go-native) -- Three-pass build: (1) discovers shared dependencies via Metafile analysis, (2) produces thin per-component ES modules with shared deps as external imports, (3) bundles the shared runtime from the discovered dependency graph. Handles imports, decorators, private fields, and module resolution. Uses Node.js conditional exports (`"node"` condition) so Lit's `isServer` is `true`.
+- **esbuild** (Go-native) -- Three-pass build: (1) discovers shared dependencies via Metafile analysis, (2) produces thin per-component ES modules with shared deps as external imports, (3) bundles the shared runtime from the discovered dependency graph. Handles imports, decorators, private fields, and module resolution. Uses `"browser"` conditional exports so packages resolve browser-compatible entry points (avoiding `node:` built-in imports that QuickJS cannot provide).
 - **QJS** (QuickJS via WebAssembly/Wazero) -- Loads the shared runtime module once via `JS_SetModuleLoaderFunc`, then evaluates thin component modules that import from it. Pure Go, no CGo, cross-compiles everywhere. ~2MB WASM module, ~400ms cold start, <1ms per render.
 - **golang.org/x/net/html** -- Parses and transforms HTML documents, inserting Declarative Shadow DOM templates.
 
@@ -496,10 +510,10 @@ pkg/transformer/        HTML file walker, component discovery, DSD expansion
 
 ### Changesets
 
-This project uses [Changesets](https://github.com/changesets/changesets) for version management and changelog generation. When making a notable change (new feature, bug fix, breaking change), add a changeset before merging:
+This project uses a Go-native changeset tool for version management and changelog generation. When making a notable change (new feature, bug fix, breaking change), add a changeset before merging:
 
 ```bash
-npx changeset
+go run ./tools/changeset
 ```
 
 This prompts you to select the semver bump type (major/minor/patch) and write a short description. A markdown file is created in `.changeset/` and committed with your PR.
@@ -510,11 +524,12 @@ Changes that don't warrant a release (docs, CI tweaks, refactoring with no publi
 
 Releases are fully automated via GitHub Actions:
 
-1. When PRs with changeset files are merged to `main`, the [changesets action](https://github.com/changesets/action) opens (or updates) a "chore: prepare release" PR that bumps the version in `package.json` and updates `CHANGELOG.md`.
-2. When you merge the release PR, the workflow automatically:
-   - Creates a git tag (`vX.Y.Z`)
+1. When PRs with changeset files are merged to `main`, the `prepare-release` workflow consumes changesets, bumps the version in `cmd/golit/version.go`, updates `CHANGELOG.md`, and opens (or updates) a `release/next` PR.
+2. When you merge the release PR, the `release` workflow automatically:
    - Cross-compiles binaries for Linux, macOS, and Windows (amd64 + arm64)
-   - Publishes a GitHub Release with all binaries and SHA-256 checksums
+   - Packages archives with third-party licenses and SHA-256 checksums
+   - Creates a GitHub Release with all artifacts
+   - Triggers a Homebrew tap update
 
 ### Building locally
 
